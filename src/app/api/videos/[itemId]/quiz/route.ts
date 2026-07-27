@@ -1,7 +1,10 @@
-import { requireAppUser } from "@/lib/auth";
-import { parseQuizJson } from "@/lib/videoQuiz";
+import { requireAdmin, requireAppUser } from "@/lib/auth";
+import { generateVideoQuiz, parseQuizJson } from "@/lib/videoQuiz";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ itemId: string }> };
 
@@ -55,6 +58,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       title: row.title,
       quizStatus: row.quizStatus,
       quizError: row.quizError,
+      notesStatus: row.notesStatus,
       quiz: quiz
         ? {
             title: quiz.title,
@@ -73,6 +77,63 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const message = error instanceof Error ? error.message : "Failed to load quiz";
     if (message === "UNAUTHORIZED") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json({ message }, { status: 500 });
+  }
+}
+
+/** Admin-only: generate or regenerate quiz for this video. */
+export async function POST(request: Request, { params }: RouteParams) {
+  try {
+    await requireAdmin();
+    const { itemId: rawId } = await params;
+    const itemId = decodeURIComponent(rawId).trim();
+    const body = (await request.json().catch(() => ({}))) as { force?: boolean };
+
+    const row = await generateVideoQuiz({
+      itemId,
+      force: body.force !== false,
+    });
+
+    const quiz =
+      row.quizStatus === "READY" ? parseQuizJson(row.quizJson) : null;
+
+    return NextResponse.json({
+      itemId: row.itemId,
+      quizStatus: row.quizStatus,
+      quizError: row.quizError,
+      notesStatus: row.notesStatus,
+      quiz: quiz
+        ? {
+            title: quiz.title,
+            questions: quiz.questions.map((q) => ({
+              id: q.id,
+              prompt: q.prompt,
+              choices: q.choices,
+              topic: q.topic,
+            })),
+          }
+        : null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to generate quiz";
+    if (message === "UNAUTHORIZED") {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+    if (message === "FORBIDDEN") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+    if (message === "NOTES_NOT_READY") {
+      return NextResponse.json(
+        { message: "Generate lecture notes first, then create the quiz." },
+        { status: 400 },
+      );
+    }
+    if (message === "NOT_FOUND") {
+      return NextResponse.json(
+        { message: "Video not found in database yet" },
+        { status: 404 },
+      );
     }
     return NextResponse.json({ message }, { status: 500 });
   }

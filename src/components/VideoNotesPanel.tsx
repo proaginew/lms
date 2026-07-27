@@ -258,7 +258,7 @@ export default function VideoNotesPanel({
                     disabled={isPending}
                     onClick={regenerate}
                   >
-                    {isPending ? "Working…" : "Regenerate"}
+                    {isPending ? "Generating…" : "Regenerate notes"}
                   </button>
                 </>
               )}
@@ -271,7 +271,7 @@ export default function VideoNotesPanel({
               disabled={isPending}
               onClick={regenerate}
             >
-              {isPending ? "Working…" : "Generate now"}
+              {isPending ? "Generating notes…" : "Generate notes"}
             </button>
           )}
         </div>

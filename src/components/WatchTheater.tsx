@@ -120,7 +120,7 @@ export default function WatchTheater({
               isAdmin={isAdmin}
             />
           ) : (
-            <VideoQuizPanel itemId={currentId} />
+            <VideoQuizPanel itemId={currentId} isAdmin={isAdmin} />
           )}
         </div>
 

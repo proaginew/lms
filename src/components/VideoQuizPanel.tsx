@@ -20,10 +20,12 @@ type Attempt = {
 
 type Props = {
   itemId: string;
+  isAdmin: boolean;
 };
 
-export default function VideoQuizPanel({ itemId }: Props) {
+export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
   const [status, setStatus] = useState("NONE");
+  const [notesStatus, setNotesStatus] = useState("NONE");
   const [title, setTitle] = useState("Lecture quiz");
   const [questions, setQuestions] = useState<QuizChoiceView[]>([]);
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -48,6 +50,24 @@ export default function VideoQuizPanel({ itemId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  function applyQuizPayload(json: {
+    quizStatus?: string;
+    notesStatus?: string;
+    quiz?: { title: string; questions: QuizChoiceView[] } | null;
+    attempts?: Attempt[];
+    bestPercent?: number;
+  }) {
+    setStatus(json.quizStatus || "NONE");
+    setNotesStatus(json.notesStatus || "NONE");
+    setTitle(json.quiz?.title || "Lecture quiz");
+    setQuestions(json.quiz?.questions || []);
+    if (json.attempts) setAttempts(json.attempts);
+    if (typeof json.bestPercent === "number") setBestPercent(json.bestPercent);
+    setAnswers({});
+    setResult(null);
+    setQIndex(0);
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -55,6 +75,7 @@ export default function VideoQuizPanel({ itemId }: Props) {
         const response = await fetch(`/api/videos/${encodeURIComponent(itemId)}/quiz`);
         const json = (await response.json()) as {
           quizStatus?: string;
+          notesStatus?: string;
           quiz?: { title: string; questions: QuizChoiceView[] } | null;
           attempts?: Attempt[];
           bestPercent?: number;
@@ -62,14 +83,7 @@ export default function VideoQuizPanel({ itemId }: Props) {
         };
         if (!response.ok) throw new Error(json.message || "Failed to load quiz");
         if (cancelled) return;
-        setStatus(json.quizStatus || "NONE");
-        setTitle(json.quiz?.title || "Lecture quiz");
-        setQuestions(json.quiz?.questions || []);
-        setAttempts(json.attempts || []);
-        setBestPercent(json.bestPercent || 0);
-        setAnswers({});
-        setResult(null);
-        setQIndex(0);
+        applyQuizPayload(json);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load quiz");
@@ -80,6 +94,30 @@ export default function VideoQuizPanel({ itemId }: Props) {
       cancelled = true;
     };
   }, [itemId]);
+
+  function generateQuiz(force = true) {
+    if (!isAdmin) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/videos/${encodeURIComponent(itemId)}/quiz`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force }),
+        });
+        const json = (await response.json()) as {
+          quizStatus?: string;
+          notesStatus?: string;
+          quiz?: { title: string; questions: QuizChoiceView[] } | null;
+          message?: string;
+        };
+        if (!response.ok) throw new Error(json.message || "Could not generate quiz");
+        applyQuizPayload(json);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not generate quiz");
+      }
+    });
+  }
 
   function submit() {
     setError(null);
@@ -116,41 +154,85 @@ export default function VideoQuizPanel({ itemId }: Props) {
 
   const current = questions[qIndex];
   const ready = status === "READY" && questions.length > 0;
+  const notesReady = notesStatus === "READY";
 
   return (
     <section className="notes-shell">
       <div className="notes-toolbar">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="notes-toolbar-title">{title}</h2>
             <span
               className={`notes-status-pill ${
                 ready
                   ? "notes-status-ready"
-                  : status === "PENDING"
+                  : status === "PENDING" || isPending
                     ? "notes-status-busy"
                     : status === "FAILED"
                       ? "notes-status-failed"
                       : "notes-status-idle"
               }`}
             >
-              {ready ? "Ready" : status === "PENDING" ? "Preparing" : status}
+              {ready
+                ? "Ready"
+                : isPending
+                  ? "Generating"
+                  : status === "PENDING"
+                    ? "Preparing"
+                    : status}
             </span>
           </div>
           <p className="notes-toolbar-copy">
             {ready
               ? `Best score ${bestPercent}% · Earn XP for each attempt`
-              : "Quiz is generated automatically after notes are ready."}
+              : notesReady
+                ? "Notes are ready — generate a quiz for this lecture."
+                : "Generate lecture notes first, then create the quiz."}
           </p>
         </div>
+
+        {isAdmin && (
+          <div className="notes-actions">
+            {ready ? (
+              <button
+                type="button"
+                className="notes-btn notes-btn-ghost"
+                disabled={isPending}
+                onClick={() => generateQuiz(true)}
+              >
+                {isPending ? "Generating…" : "Regenerate quiz"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="notes-btn notes-btn-primary"
+                disabled={isPending || !notesReady}
+                onClick={() => generateQuiz(true)}
+                title={
+                  notesReady
+                    ? "Generate quiz from notes"
+                    : "Generate lecture notes first"
+                }
+              >
+                {isPending ? "Generating…" : "Generate quiz"}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <p className="notes-error">{error}</p>}
 
       {!ready && (
         <div className="notes-empty">
-          <h3>Quiz coming soon</h3>
-          <p>Once lecture notes are ready, the agent builds a topic-covering quiz here.</p>
+          <h3>{isAdmin ? "Generate a quiz for this video" : "Quiz coming soon"}</h3>
+          <p>
+            {isAdmin
+              ? notesReady
+                ? "Click Generate quiz to create exam-style questions from the lecture notes."
+                : "Open the Lecture notes tab and generate notes first, then come back here."
+              : "Once lecture notes are ready, the agent builds a topic-covering quiz here."}
+          </p>
         </div>
       )}
 
@@ -234,7 +316,9 @@ export default function VideoQuizPanel({ itemId }: Props) {
                 <div
                   key={detail.id}
                   className={`rounded-xl border p-3 ${
-                    detail.correct ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"
+                    detail.correct
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-rose-200 bg-rose-50"
                   }`}
                 >
                   <p className="text-sm font-semibold">
