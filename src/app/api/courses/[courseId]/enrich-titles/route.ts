@@ -37,8 +37,9 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     const files = await listOneDriveFolderChildren(courseFolderId);
     const videos = files.filter((file) => file.isVideo);
-    let targets = body.itemId
-      ? videos.filter((video) => video.id === body.itemId.trim())
+    const itemId = body.itemId?.trim();
+    let targets = itemId
+      ? videos.filter((video) => video.id === itemId)
       : videos;
 
     if (onlyMissing) {
