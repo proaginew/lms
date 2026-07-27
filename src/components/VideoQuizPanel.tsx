@@ -18,6 +18,13 @@ type Attempt = {
   createdAt: string;
 };
 
+type AnswerFeedback = {
+  selected: number;
+  correct: boolean;
+  correctIndex: number;
+  explanation: string;
+};
+
 type Props = {
   itemId: string;
   isAdmin: boolean;
@@ -29,6 +36,8 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
   const [title, setTitle] = useState("Lecture quiz");
   const [questions, setQuestions] = useState<QuizChoiceView[]>([]);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [feedback, setFeedback] = useState<Record<string, AnswerFeedback>>({});
+  const [checkingId, setCheckingId] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [bestPercent, setBestPercent] = useState(0);
   const [qIndex, setQIndex] = useState(0);
@@ -64,6 +73,8 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
     if (json.attempts) setAttempts(json.attempts);
     if (typeof json.bestPercent === "number") setBestPercent(json.bestPercent);
     setAnswers({});
+    setFeedback({});
+    setCheckingId(null);
     setResult(null);
     setQIndex(0);
   }
@@ -119,6 +130,46 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
     });
   }
 
+  async function checkAnswer(questionId: string, selected: number) {
+    if (feedback[questionId] || checkingId) return;
+    setError(null);
+    setAnswers((prev) => ({ ...prev, [questionId]: selected }));
+    setCheckingId(questionId);
+    try {
+      const response = await fetch(
+        `/api/videos/${encodeURIComponent(itemId)}/quiz/check`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ questionId, selected }),
+        },
+      );
+      const json = (await response.json()) as AnswerFeedback & {
+        questionId?: string;
+        message?: string;
+      };
+      if (!response.ok) throw new Error(json.message || "Could not check answer");
+      setFeedback((prev) => ({
+        ...prev,
+        [questionId]: {
+          selected: json.selected,
+          correct: json.correct,
+          correctIndex: json.correctIndex,
+          explanation: json.explanation || "",
+        },
+      }));
+    } catch (err) {
+      setAnswers((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
+      setError(err instanceof Error ? err.message : "Could not check answer");
+    } finally {
+      setCheckingId(null);
+    }
+  }
+
   function submit() {
     setError(null);
     startTransition(async () => {
@@ -155,6 +206,10 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
   const current = questions[qIndex];
   const ready = status === "READY" && questions.length > 0;
   const notesReady = notesStatus === "READY";
+  const currentFeedback = current ? feedback[current.id] : undefined;
+  const allChecked =
+    questions.length > 0 && questions.every((q) => Boolean(feedback[q.id]));
+  const runningCorrect = Object.values(feedback).filter((f) => f.correct).length;
 
   return (
     <section className="notes-shell">
@@ -184,7 +239,7 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
           </div>
           <p className="notes-toolbar-copy">
             {ready
-              ? `Best score ${bestPercent}% · Earn XP for each attempt`
+              ? `Best score ${bestPercent}% · Instant feedback after each answer · Earn XP on finish`
               : notesReady
                 ? "Notes are ready — generate a quiz for this lecture."
                 : "Generate lecture notes first, then create the quiz."}
@@ -238,35 +293,92 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
 
       {ready && !result && current && (
         <div className="notes-article space-y-4">
-          <p className="text-sm text-[var(--yt-muted)]">
-            Question {qIndex + 1} of {questions.length}
-            {current.topic ? ` · ${current.topic}` : ""}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-[var(--yt-muted)]">
+              Question {qIndex + 1} of {questions.length}
+              {current.topic ? ` · ${current.topic}` : ""}
+            </p>
+            {Object.keys(feedback).length > 0 && (
+              <p className="text-sm font-medium text-[#0369a1]">
+                So far {runningCorrect}/{Object.keys(feedback).length} correct
+              </p>
+            )}
+          </div>
           <h3 className="text-lg font-semibold leading-snug">{current.prompt}</h3>
           <div className="grid gap-2">
             {current.choices.map((choice, index) => {
-              const selected = answers[current.id] === index;
+              const locked = Boolean(currentFeedback);
+              const isSelected = answers[current.id] === index;
+              const isCorrectChoice =
+                currentFeedback && index === currentFeedback.correctIndex;
+              const isWrongSelected =
+                currentFeedback &&
+                !currentFeedback.correct &&
+                index === currentFeedback.selected;
+
+              let choiceClass =
+                "border-[var(--yt-border)] bg-white hover:bg-[#f8fafc]";
+              if (locked && isCorrectChoice) {
+                choiceClass = "border-emerald-400 bg-emerald-50";
+              } else if (locked && isWrongSelected) {
+                choiceClass = "border-rose-400 bg-rose-50";
+              } else if (!locked && isSelected) {
+                choiceClass = "border-[#0284c7] bg-[#e0f2fe]";
+              }
+
               return (
                 <button
                   key={index}
                   type="button"
-                  className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-                    selected
-                      ? "border-[#0284c7] bg-[#e0f2fe]"
-                      : "border-[var(--yt-border)] bg-white hover:bg-[#f8fafc]"
-                  }`}
-                  onClick={() =>
-                    setAnswers((prev) => ({ ...prev, [current.id]: index }))
-                  }
+                  disabled={locked || checkingId === current.id}
+                  className={`rounded-xl border px-4 py-3 text-left text-sm transition disabled:cursor-default ${choiceClass}`}
+                  onClick={() => void checkAnswer(current.id, index)}
                 >
                   <span className="mr-2 font-semibold text-[#0284c7]">
                     {String.fromCharCode(65 + index)}.
                   </span>
                   {choice}
+                  {locked && isCorrectChoice ? (
+                    <span className="ml-2 text-xs font-semibold text-emerald-700">
+                      Correct
+                    </span>
+                  ) : null}
+                  {locked && isWrongSelected ? (
+                    <span className="ml-2 text-xs font-semibold text-rose-700">
+                      Your answer
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
+
+          {checkingId === current.id && (
+            <p className="text-sm text-[var(--yt-muted)]">Checking answer…</p>
+          )}
+
+          {currentFeedback && (
+            <div
+              className={`rounded-xl border p-3 ${
+                currentFeedback.correct
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-rose-200 bg-rose-50"
+              }`}
+            >
+              <p className="text-sm font-semibold">
+                {currentFeedback.correct ? "Correct!" : "Incorrect"}
+                {!currentFeedback.correct
+                  ? ` · Answer: ${current.choices[currentFeedback.correctIndex]}`
+                  : ""}
+              </p>
+              {currentFeedback.explanation ? (
+                <p className="mt-1 text-sm text-[var(--yt-muted)]">
+                  {currentFeedback.explanation}
+                </p>
+              ) : null}
+            </div>
+          )}
+
           <div className="notes-pager">
             <button
               type="button"
@@ -280,6 +392,7 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
               <button
                 type="button"
                 className="notes-btn notes-btn-primary"
+                disabled={!currentFeedback}
                 onClick={() => setQIndex((v) => Math.min(questions.length - 1, v + 1))}
               >
                 Next
@@ -288,10 +401,10 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
               <button
                 type="button"
                 className="notes-btn notes-btn-primary"
-                disabled={isPending || Object.keys(answers).length < questions.length}
+                disabled={isPending || !allChecked}
                 onClick={submit}
               >
-                {isPending ? "Scoring…" : "Submit quiz"}
+                {isPending ? "Saving…" : "Finish & earn XP"}
               </button>
             )}
           </div>
@@ -301,7 +414,7 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
       {result && (
         <div className="notes-article space-y-4">
           <div className="notes-takeaways">
-            <h3 className="notes-section-title">Results</h3>
+            <h3 className="notes-section-title">Final score</h3>
             <p className="text-2xl font-semibold">
               {result.score}/{result.maxScore} · {result.percent}%
             </p>
@@ -343,6 +456,8 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
             onClick={() => {
               setResult(null);
               setAnswers({});
+              setFeedback({});
+              setCheckingId(null);
               setQIndex(0);
             }}
           >

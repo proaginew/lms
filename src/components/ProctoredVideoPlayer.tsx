@@ -4,6 +4,7 @@ import { useClerk } from "@clerk/nextjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const PLAYBACK_CHANNEL = "aim-lms-playback-lock";
+const WATERMARK_TEXT = "AIM Technologies";
 
 type Props = {
   courseFolderId: string;
@@ -116,7 +117,7 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
         keepalive: true,
       });
     };
-  }, [claimSession, forceLogout]);
+  }, [claimSession, forceLogout, itemId]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -136,12 +137,12 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
         const response = await fetch("/api/playback/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "heartbeat",
-          token,
-          tabId: tabIdRef.current,
-          itemId,
-        }),
+          body: JSON.stringify({
+            action: "heartbeat",
+            token,
+            tabId: tabIdRef.current,
+            itemId,
+          }),
         });
         if (response.status === 409 || response.status === 401 || response.status === 403) {
           await forceLogout("Playback session ended. Signing out…");
@@ -149,7 +150,7 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
       })();
     }, 15_000);
     return () => window.clearInterval(id);
-  }, [forceLogout]);
+  }, [forceLogout, itemId]);
 
   useEffect(() => {
     const onContextMenu = (event: Event) => event.preventDefault();
@@ -176,7 +177,7 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 text-xs text-[var(--yt-muted)]">
         <p>{status}</p>
-        <p>Proctored · single tab</p>
+        <p>Proctored · watermarked · single tab</p>
       </div>
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -184,23 +185,32 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
         </div>
       )}
       <div
-        className="overflow-hidden bg-black lg:rounded-xl"
+        className="player-frame overflow-hidden bg-black lg:rounded-xl"
         onContextMenu={(event) => event.preventDefault()}
       >
         {streamUrl ? (
-          <video
-            ref={videoRef}
-            key={streamUrl}
-            controls
-            controlsList="nodownload noremoteplayback noplaybackrate"
-            disablePictureInPicture
-            disableRemotePlayback
-            playsInline
-            className="aspect-video w-full"
-            src={streamUrl}
-          >
-            Your browser does not support video playback.
-          </video>
+          <>
+            <video
+              ref={videoRef}
+              key={streamUrl}
+              controls
+              controlsList="nodownload noremoteplayback noplaybackrate"
+              disablePictureInPicture
+              disableRemotePlayback
+              playsInline
+              className="aspect-video w-full"
+              src={streamUrl}
+            >
+              Your browser does not support video playback.
+            </video>
+            <div className="player-watermark" aria-hidden>
+              {Array.from({ length: 12 }).map((_, index) => (
+                <div key={index} className="player-watermark-tile">
+                  <span>{WATERMARK_TEXT}</span>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <div className="flex aspect-video items-center justify-center text-sm text-gray-400">
             {error ? "Playback unavailable" : "Preparing secure player…"}

@@ -1,6 +1,7 @@
 "use client";
 
 import LiveUsersChip from "@/components/LiveUsersChip";
+import NavigationProgress from "@/components/NavigationProgress";
 import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
@@ -51,6 +52,7 @@ export default function AppShell({ role, children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-[var(--yt-bg)] text-[var(--yt-ink)]">
+      <NavigationProgress />
       <header className="sticky top-0 z-40 bg-[var(--yt-surface)]">
         <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-3 py-2 sm:gap-4 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2">

@@ -231,6 +231,199 @@ export async function getLearnerAnalytics(userId: string) {
   };
 }
 
+export async function getQuizAdminAnalytics() {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [attempts, recent, byVideoRaw, gamers] = await Promise.all([
+    prisma.quizAttempt.findMany({
+      select: {
+        id: true,
+        userId: true,
+        itemId: true,
+        percent: true,
+        score: true,
+        maxScore: true,
+        xpAwarded: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.quizAttempt.findMany({
+      take: 25,
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    }),
+    prisma.quizAttempt.groupBy({
+      by: ["itemId"],
+      _count: { _all: true },
+      _avg: { percent: true },
+      orderBy: { _count: { itemId: "desc" } },
+      take: 8,
+    }),
+    prisma.userGamification.findMany({
+      take: 8,
+      orderBy: { totalXp: "desc" },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    }),
+  ]);
+
+  const videoIds = Array.from(
+    new Set([
+      ...recent.map((a) => a.itemId),
+      ...byVideoRaw.map((row) => row.itemId),
+    ]),
+  );
+  const videos = videoIds.length
+    ? await prisma.videoAsset.findMany({
+        where: { itemId: { in: videoIds } },
+        select: { itemId: true, title: true, fileName: true, courseFolderId: true },
+      })
+    : [];
+  const videoTitle = new Map(
+    videos.map((v) => [v.itemId, v.title || v.fileName || "Lecture"]),
+  );
+
+  const learners = new Set(attempts.map((a) => a.userId)).size;
+  const avgPercent = attempts.length
+    ? Math.round(
+        attempts.reduce((sum, a) => sum + a.percent, 0) / attempts.length,
+      )
+    : 0;
+  const passRate = attempts.length
+    ? Math.round(
+        (attempts.filter((a) => a.percent >= 70).length / attempts.length) * 100,
+      )
+    : 0;
+  const attemptsThisWeek = attempts.filter((a) => a.createdAt >= weekAgo).length;
+  const perfectCount = attempts.filter((a) => a.percent === 100).length;
+
+  const byLearnerMap = new Map<
+    string,
+    {
+      userId: string;
+      name: string | null;
+      email: string | null;
+      attempts: number;
+      bestPercent: number;
+      avgPercent: number;
+      totalXp: number;
+      lastAt: Date;
+      percents: number[];
+    }
+  >();
+
+  for (const attempt of attempts) {
+    const existing = byLearnerMap.get(attempt.userId);
+    if (!existing) {
+      byLearnerMap.set(attempt.userId, {
+        userId: attempt.userId,
+        name: null,
+        email: null,
+        attempts: 1,
+        bestPercent: attempt.percent,
+        avgPercent: attempt.percent,
+        totalXp: attempt.xpAwarded,
+        lastAt: attempt.createdAt,
+        percents: [attempt.percent],
+      });
+      continue;
+    }
+    existing.attempts += 1;
+    existing.bestPercent = Math.max(existing.bestPercent, attempt.percent);
+    existing.totalXp += attempt.xpAwarded;
+    existing.percents.push(attempt.percent);
+    if (attempt.createdAt > existing.lastAt) existing.lastAt = attempt.createdAt;
+  }
+
+  const recentUserMeta = new Map(
+    recent.map((a) => [a.userId, { name: a.user.name, email: a.user.email }]),
+  );
+  for (const [userId, meta] of recentUserMeta) {
+    const row = byLearnerMap.get(userId);
+    if (row) {
+      row.name = meta.name;
+      row.email = meta.email;
+    }
+  }
+
+  // Fill missing learner names for top performers
+  const missingIds = Array.from(byLearnerMap.values())
+    .filter((r) => !r.name && !r.email)
+    .map((r) => r.userId);
+  if (missingIds.length) {
+    const users = await prisma.user.findMany({
+      where: { id: { in: missingIds } },
+      select: { id: true, name: true, email: true },
+    });
+    for (const u of users) {
+      const row = byLearnerMap.get(u.id);
+      if (row) {
+        row.name = u.name;
+        row.email = u.email;
+      }
+    }
+  }
+
+  const byLearner = Array.from(byLearnerMap.values())
+    .map((row) => ({
+      userId: row.userId,
+      name: row.name,
+      email: row.email,
+      attempts: row.attempts,
+      bestPercent: row.bestPercent,
+      avgPercent: Math.round(
+        row.percents.reduce((s, p) => s + p, 0) / row.percents.length,
+      ),
+      totalXp: row.totalXp,
+      lastAt: row.lastAt.toISOString(),
+    }))
+    .sort((a, b) => b.attempts - a.attempts || b.avgPercent - a.avgPercent)
+    .slice(0, 12);
+
+  return {
+    summary: {
+      totalAttempts: attempts.length,
+      learners,
+      avgPercent,
+      passRate,
+      attemptsThisWeek,
+      perfectCount,
+    },
+    recent: recent.map((a) => ({
+      id: a.id,
+      userId: a.userId,
+      userName: a.user.name,
+      userEmail: a.user.email,
+      itemId: a.itemId,
+      videoTitle: videoTitle.get(a.itemId) || "Lecture",
+      score: a.score,
+      maxScore: a.maxScore,
+      percent: a.percent,
+      xpAwarded: a.xpAwarded,
+      createdAt: a.createdAt.toISOString(),
+    })),
+    byVideo: byVideoRaw.map((row) => ({
+      itemId: row.itemId,
+      videoTitle: videoTitle.get(row.itemId) || "Lecture",
+      attempts: row._count._all,
+      avgPercent: Math.round(row._avg.percent || 0),
+    })),
+    byLearner,
+    leaderboard: gamers.map((g) => ({
+      userId: g.userId,
+      name: g.user.name,
+      email: g.user.email,
+      totalXp: g.totalXp,
+      level: g.level,
+      currentStreak: g.currentStreak,
+    })),
+  };
+}
+
 export async function getAdminAnalytics() {
   const events = await prisma.watchEvent.findMany({
     include: {
