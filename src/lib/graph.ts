@@ -180,7 +180,10 @@ async function listChildren(token: string, owner: string, folderId?: string | nu
   let nextUrl: string | null = url;
   let pages = 0;
   while (nextUrl && pages < 10) {
-    const page = await graphGet<GraphDriveChildrenResponse>(token, nextUrl);
+    const page: GraphDriveChildrenResponse = await graphGet(
+      token,
+      nextUrl,
+    );
     for (const raw of page.value ?? []) {
       const mapped = mapDriveItem(raw);
       if (mapped) {
