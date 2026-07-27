@@ -47,7 +47,7 @@ export default function RequestAccessButton({
         type="button"
         onClick={onClick}
         disabled={disabled || loading}
-        className="inline-flex h-10 items-center rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+        className="yt-btn-primary disabled:opacity-60"
       >
         {loading ? "Submitting..." : label}
       </button>

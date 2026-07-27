@@ -1,6 +1,10 @@
+"use client";
+
 import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useMemo, useState } from "react";
 
 type AppShellProps = {
   role: string;
@@ -24,46 +28,107 @@ const adminLinks = [
 export default function AppShell({ role, children }: AppShellProps) {
   const isAdmin = role === "ADMIN";
   const links = isAdmin ? adminLinks : learnerLinks;
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+
+  const searchTarget = useMemo(() => {
+    if (pathname.startsWith("/courses/")) return pathname.split("/watch/")[0];
+    return "/";
+  }, [pathname]);
+
+  function onSearch(event: FormEvent) {
+    event.preventDefault();
+    const q = query.trim();
+    const url = q
+      ? `${searchTarget}?q=${encodeURIComponent(q)}`
+      : searchTarget;
+    router.push(url);
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-4 sm:px-6 sm:py-3">
-          <Link href="/" className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
-            <div className="rounded-lg bg-white px-1.5 py-1 ring-1 ring-gray-200 sm:px-2">
-              <Image
-                src="/images/logo/aim-logo.png"
-                alt="AIM Technologies"
-                width={140}
-                height={42}
-                priority
-                className="h-7 w-auto sm:h-9"
-              />
-            </div>
-            <span className="hidden text-sm font-medium text-gray-600 sm:inline sm:text-base">
-              AIM LMS
+    <div className="min-h-screen bg-[var(--yt-bg)] text-[var(--yt-ink)]">
+      <header className="sticky top-0 z-40 bg-[var(--yt-surface)]">
+        <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-3 py-2 sm:gap-4 sm:px-6">
+          <Link href="/" className="flex shrink-0 items-center gap-2">
+            <Image
+              src="/images/logo/aim-logo.png"
+              alt="AIM Technologies"
+              width={120}
+              height={36}
+              priority
+              className="h-7 w-auto sm:h-8"
+            />
+            <span className="hidden text-lg font-semibold tracking-tight sm:inline">
+              LMS
             </span>
           </Link>
 
-          <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1">
-            {links.map((link) => (
-              <Link
-                key={link.href + link.label}
-                href={link.href}
-                className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-brand-50 hover:text-brand-600 sm:px-3 sm:py-2 sm:text-sm"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <form
+            onSubmit={onSearch}
+            className="mx-auto hidden min-w-0 max-w-[640px] flex-1 items-stretch sm:flex"
+          >
+            <input
+              className="yt-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search"
+              aria-label="Search"
+            />
+            <button type="submit" className="yt-search-btn" aria-label="Submit search">
+              ⌕
+            </button>
+          </form>
 
-          <div className="shrink-0">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+            <Link href="/my-learning" className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline">
+              Library
+            </Link>
+            {isAdmin && (
+              <Link href="/admin" className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline">
+                Studio
+              </Link>
+            )}
             <UserButton />
           </div>
         </div>
+
+        <form onSubmit={onSearch} className="flex px-3 pb-2 sm:hidden">
+          <input
+            className="yt-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            aria-label="Search"
+          />
+          <button type="submit" className="yt-search-btn" aria-label="Submit search">
+            ⌕
+          </button>
+        </form>
+
+        <nav className="border-t border-[var(--yt-border)]">
+          <div className="mx-auto flex max-w-[1800px] gap-2 overflow-x-auto px-3 py-2 sm:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {links.map((link) => {
+              const active =
+                link.href === "/"
+                  ? pathname === "/"
+                  : pathname === link.href || pathname.startsWith(`${link.href}/`);
+              return (
+                <Link
+                  key={link.href + link.label}
+                  href={link.href}
+                  className={`yt-chip ${active ? "yt-chip-active" : ""}`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </header>
 
-      <main className="mx-auto max-w-7xl p-3 sm:p-6">{children}</main>
+      <main className="mx-auto max-w-[1800px] px-3 py-4 sm:px-6 sm:py-6">{children}</main>
     </div>
   );
 }

@@ -173,10 +173,10 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
   }, []);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3 text-xs text-[var(--yt-muted)]">
         <p>{status}</p>
-        <p>Proctored · no download · single tab</p>
+        <p>Proctored · single tab</p>
       </div>
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -184,7 +184,7 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
         </div>
       )}
       <div
-        className="overflow-hidden rounded-2xl border border-gray-200 bg-black"
+        className="overflow-hidden bg-black lg:rounded-xl"
         onContextMenu={(event) => event.preventDefault()}
       >
         {streamUrl ? (
@@ -198,9 +198,6 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
             playsInline
             className="aspect-video w-full"
             src={streamUrl}
-            onPause={() => {
-              // keep session alive while paused in-tab; minimize still logs out
-            }}
           >
             Your browser does not support video playback.
           </video>

@@ -8,20 +8,13 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-function badgeClass(status: string | null) {
-  if (status === "APPROVED") {
-    return "border-green-200 bg-green-50 text-green-700";
-  }
-  if (status === "PENDING") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-  if (status === "REJECTED" || status === "REVOKED") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-  return "border-gray-200 bg-gray-50 text-gray-600";
-}
+type PageProps = {
+  searchParams: Promise<{ q?: string }>;
+};
 
-export default async function CoursesPage() {
+export default async function CoursesPage({ searchParams }: PageProps) {
+  const { q } = await searchParams;
+  const query = q?.trim().toLowerCase() ?? "";
   const user = await requireAppUser();
   const isAdmin = user.role === "ADMIN";
 
@@ -34,6 +27,10 @@ export default async function CoursesPage() {
     coursesError = error instanceof Error ? error.message : "Failed to load courses";
   }
 
+  if (query) {
+    courses = courses.filter((course) => course.name.toLowerCase().includes(query));
+  }
+
   const requests = await prisma.accessRequest.findMany({
     where: { userId: user.id },
     select: { courseFolderId: true, status: true, rejectionReason: true },
@@ -41,11 +38,11 @@ export default async function CoursesPage() {
   const byFolder = new Map(requests.map((r) => [r.courseFolderId, r]));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h2 className="text-2xl font-semibold text-gray-900">Courses</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Request access to unlock a course. An admin will review your request.
+        <h1 className="text-xl font-semibold sm:text-2xl">Home</h1>
+        <p className="yt-meta mt-1">
+          {query ? `Results for “${q}”` : "Browse courses"}
         </p>
       </div>
 
@@ -56,87 +53,71 @@ export default async function CoursesPage() {
       )}
 
       {!coursesError && courses.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-sm text-gray-500">
-          No courses available yet.
+        <div className="yt-card p-8 text-sm text-[var(--yt-muted)]">
+          {query ? "No courses match your search." : "No courses available yet."}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
           {courses.map((course) => {
             const req = byFolder.get(course.id);
             const status = req?.status ?? null;
             const unlocked = isAdmin || status === "APPROVED";
             const thumb = webThumbnailFor(course.id, course.name, "Course");
-            return (
-              <div
-                key={course.id}
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-              >
-                {unlocked ? (
-                  <Link
-                    href={`/courses/${encodeURIComponent(course.id)}`}
-                    className="group relative block aspect-video overflow-hidden bg-slate-800"
-                  >
-                    <Image
-                      src={thumb}
-                      alt={course.name}
-                      fill
-                      className="object-cover transition group-hover:scale-[1.02]"
-                      sizes="(max-width: 640px) 100vw, 33vw"
-                      unoptimized
-                    />
-                    <div className="absolute inset-0 bg-black/15" />
-                  </Link>
-                ) : (
-                  <div className="relative aspect-video overflow-hidden bg-slate-800">
-                    <Image
-                      src={thumb}
-                      alt={course.name}
-                      fill
-                      className="object-cover opacity-80"
-                      sizes="(max-width: 640px) 100vw, 33vw"
-                      unoptimized
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/35">
-                      <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
-                        Locked
-                      </span>
-                    </div>
-                  </div>
-                )}
+            const statusLabel = isAdmin ? "Admin" : status ?? "Locked";
 
-                <div className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="line-clamp-2 text-base font-semibold text-gray-900">
-                      {course.name}
-                    </h3>
-                    <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${badgeClass(
-                        isAdmin ? "APPROVED" : status,
-                      )}`}
-                    >
-                      {isAdmin ? "ADMIN" : status ?? "LOCKED"}
+            const thumbBlock = (
+              <div className="yt-thumb group">
+                <Image
+                  src={thumb}
+                  alt={course.name}
+                  fill
+                  className="object-cover transition duration-200 group-hover:scale-[1.03]"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
+                  unoptimized
+                  priority
+                />
+                {!unlocked && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <span className="rounded bg-black/70 px-2 py-1 text-xs font-medium text-white">
+                      Locked
                     </span>
                   </div>
+                )}
+              </div>
+            );
+
+            return (
+              <div key={course.id} className="min-w-0">
+                {unlocked ? (
+                  <Link href={`/courses/${encodeURIComponent(course.id)}`}>{thumbBlock}</Link>
+                ) : (
+                  thumbBlock
+                )}
+
+                <div className="mt-3 space-y-1 px-0.5">
+                  {unlocked ? (
+                    <Link href={`/courses/${encodeURIComponent(course.id)}`}>
+                      <h3 className="yt-title hover:underline">{course.name}</h3>
+                    </Link>
+                  ) : (
+                    <h3 className="yt-title">{course.name}</h3>
+                  )}
+                  <p className="yt-meta">
+                    {statusLabel} · Course
+                  </p>
                   {(status === "REJECTED" || status === "REVOKED") && req?.rejectionReason && (
                     <p className="text-xs text-red-600">Reason: {req.rejectionReason}</p>
                   )}
-                  <div className="flex flex-wrap gap-2">
-                    {unlocked ? (
-                      <Link
-                        href={`/courses/${encodeURIComponent(course.id)}`}
-                        className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600"
-                      >
-                        Open course
-                      </Link>
-                    ) : (
+                  {!unlocked && (
+                    <div className="pt-2">
                       <RequestAccessButton
                         courseFolderId={course.id}
                         courseName={course.name}
                         disabled={status === "PENDING"}
                         label={status === "PENDING" ? "Pending approval" : "Request access"}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

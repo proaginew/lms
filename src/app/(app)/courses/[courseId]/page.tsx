@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import CourseVideoTiles from "@/components/CourseVideoTiles";
 import RequestAccessButton from "@/components/RequestAccessButton";
@@ -39,12 +40,12 @@ export default async function CourseDetailPage({ params }: PageProps) {
 
   if (!unlocked) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 rounded-2xl border border-gray-200 bg-white p-6">
-        <Link href="/" className="text-sm text-brand-600 hover:underline">
-          Back to courses
+      <div className="mx-auto max-w-xl space-y-4">
+        <Link href="/" className="text-sm text-[var(--yt-muted)] hover:text-[var(--yt-ink)]">
+          ← Back to Home
         </Link>
-        <h1 className="text-2xl font-semibold text-gray-900">{course.name}</h1>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <h1 className="text-2xl font-semibold">{course.name}</h1>
+        <div className="yt-card px-4 py-3 text-sm text-amber-800">
           This course is locked until an admin approves your access request.
         </div>
         {(access?.status === "REJECTED" || access?.status === "REVOKED") &&
@@ -75,35 +76,33 @@ export default async function CourseDetailPage({ params }: PageProps) {
       title: cached?.title || cleanFileName(video.name) || video.name,
       topic: cached?.topic ?? null,
       meetingDate: cached?.meetingDate ?? created,
-      thumbnailUrl:
-        webThumbnailFor(
-          video.id,
-          cached?.title || cleanFileName(video.name) || video.name,
-          cached?.topic ?? null,
-        ),
+      thumbnailUrl: webThumbnailFor(
+        video.id,
+        cached?.title || cleanFileName(video.name) || video.name,
+        cached?.topic ?? null,
+      ),
       status: cached?.status || "PENDING",
     };
   });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <Link href="/" className="text-sm text-brand-600 hover:underline">
-        Back to courses
-      </Link>
-      <div className="rounded-2xl border border-gray-200 bg-white p-6">
-        <h1 className="text-2xl font-semibold text-gray-900">{course.name}</h1>
-        <p className="mt-2 text-sm text-gray-500">
-          Meeting titles come from transcription context and are saved in the database. Filter by
-          topic or date anytime.
-        </p>
+    <div className="space-y-5">
+      <div>
+        <Link href="/" className="text-sm text-[var(--yt-muted)] hover:text-[var(--yt-ink)]">
+          ← Home
+        </Link>
+        <h1 className="mt-2 text-xl font-semibold sm:text-2xl">{course.name}</h1>
+        <p className="yt-meta mt-1">{tiles.length} videos</p>
       </div>
 
-      <CourseVideoTiles
-        courseFolderId={folderId}
-        initialVideos={tiles}
-        canEnrich={unlocked}
-        isAdmin={isAdmin}
-      />
+      <Suspense fallback={<p className="yt-meta">Loading videos…</p>}>
+        <CourseVideoTiles
+          courseFolderId={folderId}
+          initialVideos={tiles}
+          canEnrich={unlocked}
+          isAdmin={isAdmin}
+        />
+      </Suspense>
     </div>
   );
 }

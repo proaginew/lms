@@ -15,64 +15,56 @@ export default async function AdminAnalyticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-gray-900">Analytics</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Active learners and viewing analytics across all subjects.
-        </p>
+        <h2 className="text-xl font-semibold sm:text-2xl">Analytics</h2>
+        <p className="yt-meta mt-1">Active learners and viewing analytics across all subjects.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Active now</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {analytics.summary.activeNow}
-          </p>
+        <div className="yt-card p-5">
+          <p className="yt-meta">Active now</p>
+          <p className="mt-2 text-3xl font-semibold">{analytics.summary.activeNow}</p>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Total watch time</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">
-            {analytics.summary.totalWatchLabel}
-          </p>
+        <div className="yt-card p-5">
+          <p className="yt-meta">Total watch time</p>
+          <p className="mt-2 text-3xl font-semibold">{analytics.summary.totalWatchLabel}</p>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Learners with activity</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">{analytics.summary.learners}</p>
+        <div className="yt-card p-5">
+          <p className="yt-meta">Learners with activity</p>
+          <p className="mt-2 text-3xl font-semibold">{analytics.summary.learners}</p>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
-          <p className="text-sm text-gray-500">Sessions</p>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">{analytics.summary.sessions}</p>
+        <div className="yt-card p-5">
+          <p className="yt-meta">Sessions</p>
+          <p className="mt-2 text-3xl font-semibold">{analytics.summary.sessions}</p>
         </div>
       </div>
 
       <section className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-900">Active learners</h3>
+        <h3 className="text-lg font-semibold">Active learners</h3>
         {analytics.active.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-sm text-gray-500">
-            No one is watching right now.
-          </p>
+          <p className="yt-card p-6 yt-meta">No one is watching right now.</p>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+          <div className="yt-card overflow-hidden">
+            <table className="yt-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3">Learner</th>
-                  <th className="px-4 py-3">Video</th>
-                  <th className="px-4 py-3">Subject</th>
-                  <th className="px-4 py-3">Course</th>
-                  <th className="px-4 py-3">Last seen</th>
+                  <th>Learner</th>
+                  <th>Video</th>
+                  <th>Subject</th>
+                  <th>Course</th>
+                  <th>Last seen</th>
                 </tr>
               </thead>
               <tbody>
                 {analytics.active.map((row) => (
-                  <tr key={row.userId} className="border-t border-gray-100">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{row.name || "Learner"}</div>
-                      <div className="text-xs text-gray-500">{row.email}</div>
+                  <tr key={row.userId}>
+                    <td>
+                      <div className="font-medium">{row.name || "Learner"}</div>
+                      <div className="text-xs text-[var(--yt-muted)]">{row.email}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{row.videoTitle}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.subject}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.courseName}</td>
-                    <td className="px-4 py-3 text-gray-500">
+                    <td>{row.videoTitle}</td>
+                    <td>{row.subject}</td>
+                    <td>{row.courseName}</td>
+                    <td className="text-[var(--yt-muted)]">
                       {new Date(row.lastSeenAt).toLocaleString()}
                     </td>
                   </tr>
@@ -84,29 +76,29 @@ export default async function AdminAnalyticsPage() {
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-900">By subject</h3>
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+        <h3 className="text-lg font-semibold">By subject</h3>
+        <div className="yt-card overflow-hidden">
+          <table className="yt-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Learners</th>
-                <th className="px-4 py-3">Watch time</th>
+                <th>Subject</th>
+                <th>Learners</th>
+                <th>Watch time</th>
               </tr>
             </thead>
             <tbody>
               {analytics.bySubject.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={3} className="py-8 text-center text-[var(--yt-muted)]">
                     No subject data yet.
                   </td>
                 </tr>
               ) : (
                 analytics.bySubject.map((row) => (
-                  <tr key={row.subject} className="border-t border-gray-100">
-                    <td className="px-4 py-3 font-medium text-gray-900">{row.subject}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.learnerCount}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.watchLabel}</td>
+                  <tr key={row.subject}>
+                    <td className="font-medium">{row.subject}</td>
+                    <td>{row.learnerCount}</td>
+                    <td>{row.watchLabel}</td>
                   </tr>
                 ))
               )}
@@ -117,38 +109,38 @@ export default async function AdminAnalyticsPage() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold text-gray-900">By learner</h3>
-          <Link href="/admin/users" className="text-sm text-brand-600 hover:underline">
+          <h3 className="text-lg font-semibold">By learner</h3>
+          <Link href="/admin/users" className="text-sm text-[var(--yt-muted)] hover:underline">
             Manage users
           </Link>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+        <div className="yt-card overflow-hidden">
+          <table className="yt-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3">Learner</th>
-                <th className="px-4 py-3">Videos</th>
-                <th className="px-4 py-3">Watch time</th>
-                <th className="px-4 py-3">Last activity</th>
+                <th>Learner</th>
+                <th>Videos</th>
+                <th>Watch time</th>
+                <th>Last activity</th>
               </tr>
             </thead>
             <tbody>
               {analytics.byLearner.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={4} className="py-8 text-center text-[var(--yt-muted)]">
                     No learner activity yet.
                   </td>
                 </tr>
               ) : (
                 analytics.byLearner.map((row) => (
-                  <tr key={row.userId} className="border-t border-gray-100">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{row.name || "Learner"}</div>
-                      <div className="text-xs text-gray-500">{row.email}</div>
+                  <tr key={row.userId}>
+                    <td>
+                      <div className="font-medium">{row.name || "Learner"}</div>
+                      <div className="text-xs text-[var(--yt-muted)]">{row.email}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{row.videoCount}</td>
-                    <td className="px-4 py-3 text-gray-600">{row.watchLabel}</td>
-                    <td className="px-4 py-3 text-gray-500">
+                    <td>{row.videoCount}</td>
+                    <td>{row.watchLabel}</td>
+                    <td className="text-[var(--yt-muted)]">
                       {new Date(row.lastSeenAt).toLocaleString()}
                     </td>
                   </tr>
@@ -160,31 +152,31 @@ export default async function AdminAnalyticsPage() {
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-900">Recent views (all learners)</h3>
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+        <h3 className="text-lg font-semibold">Recent views (all learners)</h3>
+        <div className="yt-card overflow-hidden">
+          <table className="yt-table">
+            <thead>
               <tr>
-                <th className="px-4 py-3">Learner</th>
-                <th className="px-4 py-3">Video</th>
-                <th className="px-4 py-3">Subject</th>
-                <th className="px-4 py-3">Course</th>
-                <th className="px-4 py-3">Time</th>
-                <th className="px-4 py-3">When</th>
+                <th>Learner</th>
+                <th>Video</th>
+                <th>Subject</th>
+                <th>Course</th>
+                <th>Time</th>
+                <th>When</th>
               </tr>
             </thead>
             <tbody>
               {analytics.recent.map((row) => (
-                <tr key={row.id} className="border-t border-gray-100">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{row.userName || "Learner"}</div>
-                    <div className="text-xs text-gray-500">{row.userEmail}</div>
+                <tr key={row.id}>
+                  <td>
+                    <div className="font-medium">{row.userName || "Learner"}</div>
+                    <div className="text-xs text-[var(--yt-muted)]">{row.userEmail}</div>
                   </td>
-                  <td className="px-4 py-3 text-gray-700">{row.videoTitle}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.subject}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.courseName}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.watchLabel}</td>
-                  <td className="px-4 py-3 text-gray-500">
+                  <td>{row.videoTitle}</td>
+                  <td>{row.subject}</td>
+                  <td>{row.courseName}</td>
+                  <td>{row.watchLabel}</td>
+                  <td className="text-[var(--yt-muted)]">
                     {new Date(row.lastSeenAt).toLocaleString()}
                   </td>
                 </tr>
