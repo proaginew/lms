@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+model User {
+  id          String   @id @default(cuid())
+  clerkUserId String   @unique
+  email       String?
+  name        String?
+  imageUrl    String?
+  role        Role     @default(STUDENT)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  accessRequests   AccessRequest[]
+  playbackSessions PlaybackSession[]
+  watchEvents      WatchEvent[]
+}
+
+model PlaybackSession {
+  id             String   @id @default(cuid())
+  token          String   @unique
+  userId         String
+  courseFolderId String
+  itemId         String
+  tabId          String
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AccessRequest {
+  id              String              @id @default(cuid())
+  userId          String
+  userEmail       String
+  courseFolderId  String
+  courseName      String
+  status          AccessRequestStatus @default(PENDING)
+  rejectionReason String?
+  requestedAt     DateTime            @default(now())
+  reviewedAt      DateTime?
+  updatedAt       DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseFolderId])
+  @@index([status, requestedAt])
+}
+
+model VideoAsset {
+  id                String    @id @default(cuid())
+  itemId            String    @unique
+  courseFolderId    String
+  fileName          String
+  title             String?
+  topic             String?
+  meetingDate       DateTime?
+  thumbnailUrl      String?
+  transcriptPreview String?   @db.Text
+  status            String    @default("PENDING")
+  errorMessage      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([courseFolderId])
+  @@index([status])
+  @@index([topic])
+  @@index([meetingDate])
+}
+
+model WatchEvent {
+  id             String    @id @default(cuid())
+  userId         String
+  courseFolderId String
+  courseName     String
+  itemId         String
+  videoTitle     String
+  subject        String    @default("General")
+  secondsWatched Int       @default(0)
+  startedAt      DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+  endedAt        DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lastSeenAt])
+  @@index([lastSeenAt])
+  @@index([subject])
+  @@index([courseFolderId])
+  @@index([userId, itemId, endedAt])
+}
