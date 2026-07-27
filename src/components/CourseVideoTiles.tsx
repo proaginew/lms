@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { accentClass } from "@/lib/tileAccent";
 
 export type VideoTile = {
   id: string;
@@ -218,7 +219,7 @@ export default function CourseVideoTiles({
           <button
             key={topic}
             type="button"
-            className={`yt-chip ${topicFilter === topic ? "yt-chip-active" : ""}`}
+            className={`yt-chip yt-chip-color ${accentClass(topic)} ${topicFilter === topic ? "yt-chip-active" : ""}`}
             onClick={() => setTopicFilter(topic)}
           >
             {topic}
@@ -226,14 +227,14 @@ export default function CourseVideoTiles({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs text-[var(--yt-muted)]">
+      <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+        <label className="min-w-0 flex-1 text-xs text-[var(--yt-muted)] sm:flex-none">
           Search in course
           <input
             value={localSearch}
             onChange={(event) => setLocalSearch(event.target.value)}
             placeholder="Title or topic"
-            className="mt-1 block h-9 w-48 rounded-full border border-[#ccc] bg-white px-3 text-sm text-[var(--yt-ink)] outline-none focus:border-[#1c62b9] sm:w-64"
+            className="mt-1 block h-9 w-full rounded-full border border-[#ccc] bg-white px-3 text-sm text-[var(--yt-ink)] outline-none focus:border-[#1c62b9] sm:w-64"
           />
         </label>
         <label className="text-xs text-[var(--yt-muted)]">
@@ -304,11 +305,12 @@ export default function CourseVideoTiles({
           No videos match these filters.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <div className="yt-grid">
           {filtered.map((video) => {
             const isEditing = editingId === video.id;
+            const accent = accentClass(video.topic || video.id);
             return (
-              <div key={video.id} className="min-w-0">
+              <article key={video.id} className={`yt-tile ${accent}`}>
                 <Link
                   href={`/courses/${encodeURIComponent(courseFolderId)}/watch/${encodeURIComponent(video.id)}`}
                   className="yt-thumb group block"
@@ -318,17 +320,17 @@ export default function CourseVideoTiles({
                     alt={video.title}
                     fill
                     className="object-cover transition duration-200 group-hover:scale-[1.03]"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
                     unoptimized
                   />
                   <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-white">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-white sm:h-11 sm:w-11">
                       ▶
                     </span>
                   </span>
                 </Link>
 
-                <div className="mt-3 space-y-1 px-0.5">
+                <div className="yt-tile-body space-y-1.5">
                   {isEditing ? (
                     <div className="space-y-2">
                       <input
@@ -343,7 +345,7 @@ export default function CourseVideoTiles({
                         className="h-9 w-full rounded-lg border border-[#ccc] px-3 text-sm"
                         placeholder="Topic"
                       />
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => void saveEdit(video.id)}
@@ -373,19 +375,22 @@ export default function CourseVideoTiles({
                           <button
                             type="button"
                             onClick={() => startEdit(video)}
-                            className="shrink-0 text-xs font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)]"
+                            className="shrink-0 text-[11px] font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] sm:text-xs"
                           >
                             Edit
                           </button>
                         )}
                       </div>
-                      <p className="yt-meta">
-                        {[video.topic, formatDate(video.meetingDate)].filter(Boolean).join(" · ")}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {video.topic ? (
+                          <span className="yt-badge yt-badge-accent">{video.topic}</span>
+                        ) : null}
+                        <span className="yt-meta">{formatDate(video.meetingDate)}</span>
+                      </div>
                     </>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>

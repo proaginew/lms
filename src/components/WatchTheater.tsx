@@ -4,6 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import ProctoredVideoPlayer from "@/components/ProctoredVideoPlayer";
+import VideoNotesPanel from "@/components/VideoNotesPanel";
+import VideoQuizPanel from "@/components/VideoQuizPanel";
+import type { VideoNotesView } from "@/lib/videoNotes";
 
 export type WatchPlaylistItem = {
   id: string;
@@ -19,7 +22,10 @@ type Props = {
   currentId: string;
   currentTitle: string;
   currentTopic: string | null;
+  currentMeetingDate: string | null;
   playlist: WatchPlaylistItem[];
+  initialNotes: VideoNotesView | null;
+  isAdmin: boolean;
 };
 
 function formatDate(value: string | null) {
@@ -39,11 +45,15 @@ export default function WatchTheater({
   currentId,
   currentTitle,
   currentTopic,
+  currentMeetingDate,
   playlist,
+  initialNotes,
+  isAdmin,
 }: Props) {
   const currentIndex = playlist.findIndex((item) => item.id === currentId);
   const next = currentIndex >= 0 ? playlist[currentIndex + 1] : null;
   const [autoplayHint, setAutoplayHint] = useState(true);
+  const [studyTab, setStudyTab] = useState<"notes" | "quiz">("notes");
 
   return (
     <div className="space-y-4">
@@ -55,8 +65,8 @@ export default function WatchTheater({
             <h1 className="text-xl font-semibold leading-snug sm:text-2xl">{currentTitle}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--yt-muted)]">
               {currentTopic && <span>{currentTopic}</span>}
-              {currentTopic && playlist[currentIndex]?.meetingDate && <span>·</span>}
-              <span>{formatDate(playlist[currentIndex]?.meetingDate ?? null)}</span>
+              {currentTopic && currentMeetingDate && <span>·</span>}
+              <span>{formatDate(currentMeetingDate)}</span>
               <span>·</span>
               <Link
                 href={`/courses/${encodeURIComponent(courseFolderId)}`}
@@ -76,6 +86,42 @@ export default function WatchTheater({
               )}
             </div>
           </div>
+
+          <div className="study-tabs" role="tablist" aria-label="Study materials">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={studyTab === "notes"}
+              className={`study-tab ${studyTab === "notes" ? "study-tab-active" : ""}`}
+              onClick={() => setStudyTab("notes")}
+            >
+              Lecture notes
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={studyTab === "quiz"}
+              className={`study-tab ${studyTab === "quiz" ? "study-tab-active" : ""}`}
+              onClick={() => setStudyTab("quiz")}
+            >
+              Quiz
+            </button>
+          </div>
+
+          {studyTab === "notes" ? (
+            <VideoNotesPanel
+              courseFolderId={courseFolderId}
+              courseName={courseName}
+              itemId={currentId}
+              videoTitle={currentTitle}
+              topic={currentTopic}
+              meetingDate={currentMeetingDate}
+              initialNotes={initialNotes}
+              isAdmin={isAdmin}
+            />
+          ) : (
+            <VideoQuizPanel itemId={currentId} />
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-[7.5rem] lg:self-start">

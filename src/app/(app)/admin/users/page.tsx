@@ -1,10 +1,14 @@
-import { requireAdmin } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getCurrentAppUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
-  await requireAdmin();
+  const user = await getCurrentAppUser();
+  if (!user) redirect("/signin");
+  if (user.role !== "ADMIN") redirect("/");
+
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -25,8 +29,8 @@ export default async function AdminUsersPage() {
           Admins are promoted from ADMIN_EMAILS on login.
         </p>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <table className="min-w-full text-left text-sm">
+      <div className="yt-card yt-table-scroll rounded-2xl">
+        <table className="yt-table text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3">Name</th>

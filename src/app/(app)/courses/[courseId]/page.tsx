@@ -23,8 +23,23 @@ export default async function CourseDetailPage({ params }: PageProps) {
   let course;
   try {
     course = await getOneDriveFolderMeta(folderId);
-  } catch {
-    notFound();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load course";
+    // Only treat true missing folders as 404; surface auth/network errors.
+    if (/not found|404|itemNotFound/i.test(message)) {
+      notFound();
+    }
+    return (
+      <div className="mx-auto max-w-xl space-y-4">
+        <Link href="/" className="text-sm text-[var(--yt-muted)] hover:text-[var(--yt-ink)]">
+          ← Back to Home
+        </Link>
+        <h1 className="text-2xl font-semibold">Couldn’t open course</h1>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {message}
+        </div>
+      </div>
+    );
   }
 
   const access = await prisma.accessRequest.findUnique({

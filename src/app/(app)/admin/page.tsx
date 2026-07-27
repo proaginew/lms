@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentAppUser } from "@/lib/auth";
 import { getActiveLearners } from "@/lib/analytics";
 import { listOneDriveCourses } from "@/lib/graph";
+import { accentClass } from "@/lib/tileAccent";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -32,11 +33,11 @@ export default async function AdminDashboardPage() {
   }
 
   const cards = [
-    { label: "Active now", value: active.length, href: "/admin/analytics" },
-    { label: "Pending requests", value: pending, href: "/admin/requests" },
-    { label: "Approved grants", value: approved, href: "/admin/requests" },
-    { label: "Users", value: users, href: "/admin/users" },
-    { label: "Courses", value: courseCount, href: "/" },
+    { label: "Active now", value: active.length, href: "/admin/analytics", seed: "active" },
+    { label: "Pending requests", value: pending, href: "/admin/requests", seed: "pending" },
+    { label: "Approved grants", value: approved, href: "/admin/requests", seed: "approved" },
+    { label: "Users", value: users, href: "/admin/users", seed: "users" },
+    { label: "Courses", value: courseCount, href: "/", seed: "courses" },
   ];
 
   return (
@@ -45,11 +46,15 @@ export default async function AdminDashboardPage() {
         <h2 className="text-xl font-semibold sm:text-2xl">Dashboard</h2>
         <p className="yt-meta mt-1">Review access requests, active learners, and analytics.</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="yt-grid-stats yt-grid-stats-wide">
         {cards.map((card) => (
-          <Link key={card.label} href={card.href} className="yt-card p-5 hover:bg-[#f2f2f2]">
+          <Link
+            key={card.label}
+            href={card.href}
+            className={`yt-stat-card ${accentClass(card.seed)}`}
+          >
             <p className="yt-meta">{card.label}</p>
-            <p className="mt-2 text-3xl font-semibold">{card.value}</p>
+            <p className="mt-2 text-2xl font-semibold sm:text-3xl">{card.value}</p>
           </Link>
         ))}
       </div>
@@ -64,7 +69,7 @@ export default async function AdminDashboardPage() {
         {active.length === 0 ? (
           <p className="yt-card p-6 yt-meta">Nobody is watching right now.</p>
         ) : (
-          <div className="yt-card overflow-hidden">
+          <div className="yt-card yt-table-scroll">
             <table className="yt-table">
               <thead>
                 <tr>

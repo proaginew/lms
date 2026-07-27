@@ -78,8 +78,8 @@ export default function AccessRequestsTable() {
           {error}
         </div>
       )}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <table className="min-w-full text-left text-sm">
+      <div className="yt-card yt-table-scroll rounded-2xl">
+        <table className="yt-table text-left text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3">User</th>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import RequestAccessButton from "@/components/RequestAccessButton";
 import { requireAppUser } from "@/lib/auth";
 import { listOneDriveCourses } from "@/lib/graph";
+import { accentClass } from "@/lib/tileAccent";
 import { webThumbnailFor } from "@/lib/videoTitles";
 import { prisma } from "@/lib/prisma";
 
@@ -11,6 +12,14 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   searchParams: Promise<{ q?: string }>;
 };
+
+function statusBadgeClass(status: string | null, isAdmin: boolean) {
+  if (isAdmin) return "yt-badge yt-badge-admin";
+  if (status === "APPROVED") return "yt-badge yt-badge-approved";
+  if (status === "PENDING") return "yt-badge yt-badge-pending";
+  if (status === "REJECTED" || status === "REVOKED") return "yt-badge yt-badge-rejected";
+  return "yt-badge yt-badge-locked";
+}
 
 export default async function CoursesPage({ searchParams }: PageProps) {
   const { q } = await searchParams;
@@ -57,13 +66,14 @@ export default async function CoursesPage({ searchParams }: PageProps) {
           {query ? "No courses match your search." : "No courses available yet."}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <div className="yt-grid">
           {courses.map((course) => {
             const req = byFolder.get(course.id);
             const status = req?.status ?? null;
             const unlocked = isAdmin || status === "APPROVED";
             const thumb = webThumbnailFor(course.id, course.name, "Course");
             const statusLabel = isAdmin ? "Admin" : status ?? "Locked";
+            const accent = accentClass(course.id);
 
             const thumbBlock = (
               <div className="yt-thumb group">
@@ -72,7 +82,7 @@ export default async function CoursesPage({ searchParams }: PageProps) {
                   alt={course.name}
                   fill
                   className="object-cover transition duration-200 group-hover:scale-[1.03]"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 25vw"
+                  sizes="(max-width: 640px) 50vw, (max-width: 1280px) 33vw, 25vw"
                   unoptimized
                   priority
                 />
@@ -87,14 +97,14 @@ export default async function CoursesPage({ searchParams }: PageProps) {
             );
 
             return (
-              <div key={course.id} className="min-w-0">
+              <article key={course.id} className={`yt-tile ${accent}`}>
                 {unlocked ? (
                   <Link href={`/courses/${encodeURIComponent(course.id)}`}>{thumbBlock}</Link>
                 ) : (
                   thumbBlock
                 )}
 
-                <div className="mt-3 space-y-1 px-0.5">
+                <div className="yt-tile-body space-y-1.5">
                   {unlocked ? (
                     <Link href={`/courses/${encodeURIComponent(course.id)}`}>
                       <h3 className="yt-title hover:underline">{course.name}</h3>
@@ -102,24 +112,27 @@ export default async function CoursesPage({ searchParams }: PageProps) {
                   ) : (
                     <h3 className="yt-title">{course.name}</h3>
                   )}
-                  <p className="yt-meta">
-                    {statusLabel} · Course
-                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={statusBadgeClass(status, isAdmin)}>{statusLabel}</span>
+                    <span className="yt-badge yt-badge-accent">Course</span>
+                  </div>
                   {(status === "REJECTED" || status === "REVOKED") && req?.rejectionReason && (
-                    <p className="text-xs text-red-600">Reason: {req.rejectionReason}</p>
+                    <p className="text-[11px] text-red-600 sm:text-xs">
+                      Reason: {req.rejectionReason}
+                    </p>
                   )}
                   {!unlocked && (
-                    <div className="pt-2">
+                    <div className="pt-1">
                       <RequestAccessButton
                         courseFolderId={course.id}
                         courseName={course.name}
                         disabled={status === "PENDING"}
-                        label={status === "PENDING" ? "Pending approval" : "Request access"}
+                        label={status === "PENDING" ? "Pending" : "Request"}
                       />
                     </div>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>

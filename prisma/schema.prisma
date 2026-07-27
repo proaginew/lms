@@ -33,6 +33,8 @@ model User {
   accessRequests   AccessRequest[]
   playbackSessions PlaybackSession[]
   watchEvents      WatchEvent[]
+  quizAttempts     QuizAttempt[]
+  gamification     UserGamification?
 }
 
 model PlaybackSession {
@@ -80,6 +82,18 @@ model VideoAsset {
   meetingDate       DateTime?
   thumbnailUrl      String?
   transcriptPreview String?   @db.Text
+  transcriptFull    String?   @db.Text
+  notesJson         String?   @db.Text
+  notesOutlineJson  String?   @db.Text
+  notesStatus       String    @default("NONE")
+  notesError        String?
+  notesGeneratedAt  DateTime?
+  notesUpdatedAt    DateTime?
+  quizJson          String?   @db.Text
+  quizStatus        String    @default("NONE")
+  quizError         String?
+  quizGeneratedAt   DateTime?
+  processingLockedAt DateTime?
   status            String    @default("PENDING")
   errorMessage      String?
   createdAt         DateTime  @default(now())
@@ -87,8 +101,55 @@ model VideoAsset {
 
   @@index([courseFolderId])
   @@index([status])
+  @@index([notesStatus])
+  @@index([quizStatus])
   @@index([topic])
   @@index([meetingDate])
+  @@index([processingLockedAt])
+}
+
+model SyncState {
+  id                    String    @id @default("drive")
+  driveDeltaToken       String?   @db.Text
+  graphSubscriptionId   String?
+  subscriptionExpiresAt DateTime?
+  lastWebhookAt         DateTime?
+  lastDiscoverAt        DateTime?
+  updatedAt             DateTime  @updatedAt
+}
+
+model QuizAttempt {
+  id             String   @id @default(cuid())
+  userId         String
+  itemId         String
+  courseFolderId String
+  score          Int
+  maxScore       Int
+  percent        Int
+  answersJson    String   @db.Text
+  xpAwarded      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([itemId, userId])
+  @@index([courseFolderId])
+}
+
+model UserGamification {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  totalXp        Int      @default(0)
+  level          Int      @default(1)
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastActivityAt DateTime?
+  badgesJson     String   @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model WatchEvent {

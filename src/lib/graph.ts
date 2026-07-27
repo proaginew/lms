@@ -255,6 +255,34 @@ export async function getOneDriveFolderMeta(folderId: string): Promise<DriveCour
   };
 }
 
+export async function getOneDriveFileMeta(itemId: string): Promise<{
+  id: string;
+  name: string;
+  createdDateTime: string | null;
+}> {
+  const token = await getMicrosoftGraphAccessToken();
+  const owner = getTargetMailbox();
+  const meta = await graphGet<{
+    id?: string;
+    name?: string;
+    createdDateTime?: string;
+  }>(
+    token,
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(
+      owner,
+    )}/drive/items/${encodeURIComponent(itemId)}?$select=id,name,createdDateTime`,
+  );
+  const id = meta.id?.trim();
+  if (!id) {
+    throw new Error("File not found");
+  }
+  return {
+    id,
+    name: meta.name?.trim() || "Meeting Recording",
+    createdDateTime: meta.createdDateTime ?? null,
+  };
+}
+
 export async function listOneDriveFolderChildren(folderId: string): Promise<DriveFileItem[]> {
   const token = await getMicrosoftGraphAccessToken();
   const owner = getTargetMailbox();
@@ -285,4 +313,84 @@ export async function getOneDriveFileContentResponse(
     throw new Error(`Content request failed: ${response.status} ${text}`);
   }
   return response;
+}
+
+export async function ensureDriveWebhookSubscription(notificationUrl: string) {
+  const token = await getMicrosoftGraphAccessToken();
+  const owner = getTargetMailbox();
+  const clientState =
+    process.env.GRAPH_WEBHOOK_CLIENT_STATE?.trim() || "aim-lms-drive-webhook";
+  const expirationDateTime = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+
+  const response = await fetch("https://graph.microsoft.com/v1.0/subscriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      changeType: "updated",
+      notificationUrl,
+      resource: `/users/${owner}/drive/root`,
+      expirationDateTime,
+      clientState,
+    }),
+    cache: "no-store",
+  });
+
+  const json = (await response.json()) as {
+    id?: string;
+    expirationDateTime?: string;
+    error?: { message?: string };
+  };
+  if (!response.ok || !json.id) {
+    throw new Error(
+      `Graph subscription failed: ${json.error?.message ?? response.status}`,
+    );
+  }
+
+  return {
+    id: json.id,
+    expirationDateTime: json.expirationDateTime
+      ? new Date(json.expirationDateTime)
+      : new Date(expirationDateTime),
+    clientState,
+  };
+}
+
+export async function renewDriveWebhookSubscription(subscriptionId: string) {
+  const token = await getMicrosoftGraphAccessToken();
+  const expirationDateTime = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ expirationDateTime }),
+      cache: "no-store",
+    },
+  );
+  const json = (await response.json()) as {
+    id?: string;
+    expirationDateTime?: string;
+    error?: { message?: string };
+  };
+  if (!response.ok) {
+    throw new Error(
+      `Graph subscription renew failed: ${json.error?.message ?? response.status}`,
+    );
+  }
+  return {
+    id: json.id || subscriptionId,
+    expirationDateTime: json.expirationDateTime
+      ? new Date(json.expirationDateTime)
+      : new Date(expirationDateTime),
+  };
+}
+
+export function expectedGraphClientState() {
+  return process.env.GRAPH_WEBHOOK_CLIENT_STATE?.trim() || "aim-lms-drive-webhook";
 }

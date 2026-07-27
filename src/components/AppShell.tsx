@@ -1,5 +1,6 @@
 "use client";
 
+import LiveUsersChip from "@/components/LiveUsersChip";
 import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
@@ -20,6 +21,7 @@ const adminLinks = [
   { href: "/", label: "Courses" },
   { href: "/my-learning", label: "My Learning" },
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/notes", label: "Content Agent" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/requests", label: "Access Requests" },
   { href: "/admin/users", label: "Users" },
@@ -82,11 +84,18 @@ export default function AppShell({ role, children }: AppShellProps) {
           </form>
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-            <Link href="/my-learning" className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline">
+            <LiveUsersChip isAdmin={isAdmin} />
+            <Link
+              href="/my-learning"
+              className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline"
+            >
               Library
             </Link>
             {isAdmin && (
-              <Link href="/admin" className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline">
+              <Link
+                href="/admin"
+                className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline"
+              >
                 Studio
               </Link>
             )}

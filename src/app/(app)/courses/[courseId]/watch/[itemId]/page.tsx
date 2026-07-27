@@ -2,6 +2,7 @@ import WatchTheater from "@/components/WatchTheater";
 import { requireAppUser } from "@/lib/auth";
 import { getOneDriveFolderMeta, listOneDriveFolderChildren } from "@/lib/graph";
 import { cleanFileName, getTitlesForItems, webThumbnailFor } from "@/lib/videoTitles";
+import { getVideoNotes } from "@/lib/videoNotes";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 
@@ -34,8 +35,12 @@ export default async function WatchPage({ params }: PageProps) {
   try {
     const course = await getOneDriveFolderMeta(folderId);
     courseName = course.name;
-  } catch {
-    notFound();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load course";
+    if (/not found|404|itemNotFound/i.test(message)) {
+      notFound();
+    }
+    throw error;
   }
 
   const files = await listOneDriveFolderChildren(folderId).catch(() => []);
@@ -61,6 +66,7 @@ export default async function WatchPage({ params }: PageProps) {
   });
 
   const current = playlist.find((item) => item.id === fileId)!;
+  const initialNotes = await getVideoNotes(fileId);
 
   return (
     <WatchTheater
@@ -69,7 +75,10 @@ export default async function WatchPage({ params }: PageProps) {
       currentId={fileId}
       currentTitle={current.title}
       currentTopic={current.topic}
+      currentMeetingDate={current.meetingDate}
       playlist={playlist}
+      initialNotes={initialNotes}
+      isAdmin={isAdmin}
     />
   );
 }

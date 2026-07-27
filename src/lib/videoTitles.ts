@@ -3,6 +3,7 @@ import { getOneDriveFileContentResponse } from "@/lib/graph";
 import { prisma } from "@/lib/prisma";
 
 const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
+const WHISPER_MAX_CHUNKS = 4;
 
 export type VideoAssetView = {
   title: string;
@@ -68,11 +69,8 @@ function parseDateHint(fileName: string, createdDateTime?: string | null): Date 
   return null;
 }
 
-async function downloadSample(itemId: string): Promise<Buffer> {
-  const upstream = await getOneDriveFileContentResponse(
-    itemId,
-    `bytes=0-${WHISPER_MAX_BYTES - 1}`,
-  );
+async function downloadByteRange(itemId: string, start: number, end: number): Promise<Buffer> {
+  const upstream = await getOneDriveFileContentResponse(itemId, `bytes=${start}-${end}`);
   const arrayBuffer = await upstream.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
@@ -89,6 +87,31 @@ async function transcribeSample(bytes: Buffer, fileName: string): Promise<string
     response_format: "text",
   });
   return String(result).trim();
+}
+
+/** Transcribe sequential file chunks for longer lectures (best-effort). */
+export async function transcribeVideoFull(itemId: string, fileName: string): Promise<string> {
+  const parts: string[] = [];
+  for (let i = 0; i < WHISPER_MAX_CHUNKS; i += 1) {
+    const start = i * WHISPER_MAX_BYTES;
+    const end = start + WHISPER_MAX_BYTES - 1;
+    let bytes: Buffer;
+    try {
+      bytes = await downloadByteRange(itemId, start, end);
+    } catch {
+      break;
+    }
+    if (!bytes.length) break;
+    try {
+      const text = await transcribeSample(bytes, `${i}-${fileName}`);
+      if (text) parts.push(text);
+    } catch {
+      if (i === 0) throw new Error("Transcription failed on first chunk");
+      break;
+    }
+    if (bytes.length < WHISPER_MAX_BYTES * 0.9) break;
+  }
+  return parts.join("\n\n").trim();
 }
 
 type MeetingMeta = {
@@ -212,8 +235,7 @@ export async function enrichVideoTitle(input: {
   const dateHint = parseDateHint(input.fileName, input.createdDateTime);
 
   try {
-    const bytes = await downloadSample(input.itemId);
-    const transcript = await transcribeSample(bytes, input.fileName);
+    const transcript = await transcribeVideoFull(input.itemId, input.fileName);
     const meta = await meetingMetaFromTranscript({
       transcript,
       fileName: input.fileName,
@@ -228,8 +250,12 @@ export async function enrichVideoTitle(input: {
         meetingDate: meta.meetingDate ? new Date(`${meta.meetingDate}T00:00:00.000Z`) : dateHint,
         thumbnailUrl: webThumbnailFor(input.itemId, meta.title, meta.topic),
         transcriptPreview: transcript.slice(0, 1500) || null,
+        transcriptFull: transcript || null,
         status: "READY",
         errorMessage: null,
+        ...(existing?.notesStatus === "NONE" || !existing
+          ? { notesStatus: "PENDING" }
+          : {}),
       },
     });
   } catch (error) {
