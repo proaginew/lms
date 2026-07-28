@@ -1,4 +1,6 @@
 import { requireAppUser } from "@/lib/auth";
+import { ensureCourseFromFolder } from "@/lib/courses";
+import { hasBlockingDues } from "@/lib/feeAccess";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -34,6 +36,19 @@ export async function POST(request: Request) {
     const email = user.email?.trim().toLowerCase() ?? "";
     if (!email) {
       return NextResponse.json({ message: "Account email is required" }, { status: 400 });
+    }
+
+    const course = await ensureCourseFromFolder({ courseFolderId, name: courseName });
+
+    if (await hasBlockingDues(user.id, course.id)) {
+      return NextResponse.json(
+        {
+          message: "Outstanding fee balance",
+          code: "FEE_BLOCKED",
+          href: "/my-learning/fees",
+        },
+        { status: 403 },
+      );
     }
 
     const existing = await prisma.accessRequest.findUnique({

@@ -25,9 +25,16 @@ Required env:
 - `AZURE_CLIENT_SECRET`
 - `AZURE_TENANT_ID`
 
+Optional (fees / notifications):
+
+- `SENDGRID_API_KEY` / `SENDGRID_FROM_EMAIL`
+- `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER`
+- `CRON_SECRET` (content agent + fee reminder crons)
+
 ```bash
 npm install
 npm run db:push
+npm run db:seed
 npm run dev
 ```
 

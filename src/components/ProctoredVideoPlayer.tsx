@@ -1,6 +1,7 @@
 "use client";
 
 import { useClerk } from "@clerk/nextjs";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const PLAYBACK_CHANNEL = "aim-lms-playback-lock";
@@ -14,6 +15,11 @@ type Props = {
 type SessionResponse = {
   token?: string;
   message?: string;
+  code?: string;
+  amountDue?: number;
+  dueDate?: string;
+  courseName?: string;
+  href?: string;
 };
 
 export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) {
@@ -28,6 +34,7 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
   const endingRef = useRef(false);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feeBlocked, setFeeBlocked] = useState(false);
   const [status, setStatus] = useState("Starting secure session…");
 
   const forceLogout = useCallback(
@@ -64,8 +71,21 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
     });
     const data = (await response.json()) as SessionResponse;
     if (!response.ok || !data.token) {
+      if (data.code === "FEE_BLOCKED") {
+        setFeeBlocked(true);
+        const amount =
+          typeof data.amountDue === "number" ? `₹${data.amountDue.toFixed(2)}` : "outstanding fees";
+        const due = data.dueDate
+          ? ` (due ${new Date(data.dueDate).toLocaleDateString()})`
+          : "";
+        throw new Error(
+          `Outstanding fee balance${due}: ${amount}. Clear dues under My Fees to continue watching.`,
+        );
+      }
+      setFeeBlocked(false);
       throw new Error(data.message ?? "Could not start playback session");
     }
+    setFeeBlocked(false);
     tokenRef.current = data.token;
     const url = `/api/drive/${encodeURIComponent(itemId)}/stream?courseFolderId=${encodeURIComponent(
       courseFolderId,
@@ -181,7 +201,15 @@ export default function ProctoredVideoPlayer({ courseFolderId, itemId }: Props) 
       </div>
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+          <p>{error}</p>
+          {feeBlocked && (
+            <Link
+              href="/my-learning/fees"
+              className="mt-2 inline-block font-semibold text-[#0369a1] underline"
+            >
+              Open My Fees
+            </Link>
+          )}
         </div>
       )}
       <div

@@ -19,10 +19,45 @@ enum AccessRequestStatus {
   REVOKED
 }
 
+enum EnrollmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  UPI_MANUAL
+  OTHER
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  BOTH
+}
+
+enum AnnouncementType {
+  NEW_COURSE
+  OFFER
+  GENERAL
+}
+
 model User {
   id          String   @id @default(cuid())
   clerkUserId String   @unique
   email       String?
+  phone       String?
   name        String?
   imageUrl    String?
   role        Role     @default(STUDENT)
@@ -30,11 +65,47 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  accessRequests   AccessRequest[]
-  playbackSessions PlaybackSession[]
-  watchEvents      WatchEvent[]
-  quizAttempts     QuizAttempt[]
-  gamification     UserGamification?
+  accessRequests          AccessRequest[]
+  playbackSessions        PlaybackSession[]
+  watchEvents             WatchEvent[]
+  quizAttempts            QuizAttempt[]
+  gamification            UserGamification?
+  enrollments             Enrollment[]
+  paymentsRecorded        Payment[]               @relation("PaymentRecordedBy")
+  notificationLogs        NotificationLog[]
+  notifications           UserNotificationState[]
+  announcementsCreated    Announcement[]          @relation("AnnouncementCreatedBy")
+  successStoriesCreated   SuccessStory[]          @relation("SuccessStoryCreatedBy")
+}
+
+model Course {
+  id             String   @id @default(cuid())
+  courseFolderId String   @unique
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  enrollments    Enrollment[]
+  feeStructures  FeeStructure[]
+  announcements  Announcement[]
+  successStories SuccessStory[]
+}
+
+model Enrollment {
+  id        String           @id @default(cuid())
+  userId    String
+  courseId  String
+  status    EnrollmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@unique([userId, courseId])
+  @@index([courseId, status])
+  @@index([userId, status])
 }
 
 model PlaybackSession {
@@ -73,31 +144,31 @@ model AccessRequest {
 }
 
 model VideoAsset {
-  id                String    @id @default(cuid())
-  itemId            String    @unique
-  courseFolderId    String
-  fileName          String
-  title             String?
-  topic             String?
-  meetingDate       DateTime?
-  thumbnailUrl      String?
-  transcriptPreview String?   @db.Text
-  transcriptFull    String?   @db.Text
-  notesJson         String?   @db.Text
-  notesOutlineJson  String?   @db.Text
-  notesStatus       String    @default("NONE")
-  notesError        String?
-  notesGeneratedAt  DateTime?
-  notesUpdatedAt    DateTime?
-  quizJson          String?   @db.Text
-  quizStatus        String    @default("NONE")
-  quizError         String?
-  quizGeneratedAt   DateTime?
+  id                 String    @id @default(cuid())
+  itemId             String    @unique
+  courseFolderId     String
+  fileName           String
+  title              String?
+  topic              String?
+  meetingDate        DateTime?
+  thumbnailUrl       String?
+  transcriptPreview  String?   @db.Text
+  transcriptFull     String?   @db.Text
+  notesJson          String?   @db.Text
+  notesOutlineJson   String?   @db.Text
+  notesStatus        String    @default("NONE")
+  notesError         String?
+  notesGeneratedAt   DateTime?
+  notesUpdatedAt     DateTime?
+  quizJson           String?   @db.Text
+  quizStatus         String    @default("NONE")
+  quizError          String?
+  quizGeneratedAt    DateTime?
   processingLockedAt DateTime?
-  status            String    @default("PENDING")
-  errorMessage      String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  status             String    @default("PENDING")
+  errorMessage       String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([courseFolderId])
   @@index([status])
@@ -138,16 +209,16 @@ model QuizAttempt {
 }
 
 model UserGamification {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  totalXp        Int      @default(0)
-  level          Int      @default(1)
-  currentStreak  Int      @default(0)
-  longestStreak  Int      @default(0)
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  totalXp        Int       @default(0)
+  level          Int       @default(1)
+  currentStreak  Int       @default(0)
+  longestStreak  Int       @default(0)
   lastActivityAt DateTime?
-  badgesJson     String   @default("[]")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  badgesJson     String    @default("[]")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -172,4 +243,149 @@ model WatchEvent {
   @@index([subject])
   @@index([courseFolderId])
   @@index([userId, itemId, endedAt])
+}
+
+// ── FEE MANAGEMENT ──────────────────────────────────────────────
+
+model FeeStructure {
+  id        String    @id @default(cuid())
+  courseId  String
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  amount    Decimal   @db.Decimal(10, 2)
+  currency  String    @default("INR")
+  dueDate   DateTime?
+  sequence  Int       @default(1)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  invoices  Invoice[]
+
+  @@index([courseId, isActive])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  enrollmentId   String
+  enrollment     Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  feeStructureId String?
+  feeStructure   FeeStructure? @relation(fields: [feeStructureId], references: [id])
+  amount         Decimal       @db.Decimal(10, 2)
+  amountPaid     Decimal       @db.Decimal(10, 2) @default(0)
+  status         InvoiceStatus @default(PENDING)
+  dueDate        DateTime
+  issuedAt       DateTime      @default(now())
+  payments       Payment[]
+  reminders      ReminderLog[]
+
+  @@index([status, dueDate])
+  @@index([enrollmentId])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount       Decimal       @db.Decimal(10, 2)
+  method       PaymentMethod
+  referenceNo  String?
+  paidAt       DateTime      @default(now())
+  recordedById String
+  recordedBy   User          @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
+  notes        String?
+  createdAt    DateTime      @default(now())
+
+  @@index([invoiceId])
+}
+
+// ── NOTIFICATIONS (EMAIL/SMS) ───────────────────────────────────
+
+model NotificationTemplate {
+  id      String              @id @default(cuid())
+  key     String              @unique
+  channel NotificationChannel
+  subject String?
+  body    String
+}
+
+model NotificationLog {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id])
+  templateKey String
+  channel     NotificationChannel
+  status      String
+  providerRef String?
+  invoiceId   String?
+  error       String?
+  createdAt   DateTime            @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model ReminderLog {
+  id                   String   @id @default(cuid())
+  invoiceId            String
+  invoice              Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  sentAt               DateTime @default(now())
+  daysBeforeOrAfterDue Int
+
+  @@index([invoiceId, sentAt])
+  @@index([invoiceId, daysBeforeOrAfterDue])
+}
+
+model UserNotificationState {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+// ── ANNOUNCEMENTS & SUCCESS STORIES ─────────────────────────────
+
+model Announcement {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  imageUrl    String?
+  ctaLabel    String?
+  ctaHref     String?
+  courseId    String?
+  course      Course?          @relation(fields: [courseId], references: [id])
+  type        AnnouncementType @default(GENERAL)
+  startAt     DateTime         @default(now())
+  endAt       DateTime?
+  isActive    Boolean          @default(true)
+  priority    Int              @default(0)
+  createdById String
+  createdBy   User             @relation("AnnouncementCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime         @default(now())
+
+  @@index([isActive, startAt, endAt])
+  @@index([priority])
+}
+
+model SuccessStory {
+  id          String    @id @default(cuid())
+  studentName String
+  photoUrl    String?
+  courseId    String?
+  course      Course?   @relation(fields: [courseId], references: [id])
+  companyName String
+  jobTitle    String
+  testimonial String?
+  placedAt    DateTime?
+  isFeatured  Boolean   @default(true)
+  createdById String
+  createdBy   User      @relation("SuccessStoryCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([isFeatured, createdAt])
 }

@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
+import { after } from "next/server";
 import RequestAccessButton from "@/components/RequestAccessButton";
 import { requireAppUser } from "@/lib/auth";
+import { ensureCourseFromFolder } from "@/lib/courses";
 import { listOneDriveCourses } from "@/lib/graph";
 import { accentClass } from "@/lib/tileAccent";
 import { webThumbnailFor } from "@/lib/videoTitles";
@@ -40,11 +42,47 @@ export default async function CoursesPage({ searchParams }: PageProps) {
     courses = courses.filter((course) => course.name.toLowerCase().includes(query));
   }
 
+  // Sync OneDrive folders into Course rows so fee admin can manage them.
+  if (courses.length) {
+    after(async () => {
+      try {
+        await Promise.all(
+          courses.map((course) =>
+            ensureCourseFromFolder({ courseFolderId: course.id, name: course.name }),
+          ),
+        );
+      } catch {
+        // best-effort
+      }
+    });
+  }
+
   const requests = await prisma.accessRequest.findMany({
     where: { userId: user.id },
     select: { courseFolderId: true, status: true, rejectionReason: true },
   });
   const byFolder = new Map(requests.map((r) => [r.courseFolderId, r]));
+
+  const now = new Date();
+  const [announcements, stories] = isAdmin
+    ? [[], []]
+    : await Promise.all([
+        prisma.announcement.findMany({
+          where: {
+            isActive: true,
+            startAt: { lte: now },
+            OR: [{ endAt: null }, { endAt: { gte: now } }],
+          },
+          orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+          take: 6,
+        }),
+        prisma.successStory.findMany({
+          where: { isFeatured: true },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          include: { course: { select: { name: true } } },
+        }),
+      ]);
 
   return (
     <div className="space-y-5">
@@ -54,6 +92,60 @@ export default async function CoursesPage({ searchParams }: PageProps) {
           {query ? `Results for “${q}”` : "Browse courses"}
         </p>
       </div>
+
+      {!isAdmin && announcements.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Announcements</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {announcements.map((item) => (
+              <article
+                key={item.id}
+                className="yt-card min-w-[260px] max-w-sm shrink-0 p-4"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--yt-muted)]">
+                  {item.type}
+                </p>
+                <h3 className="mt-1 font-semibold">{item.title}</h3>
+                {item.description ? (
+                  <p className="mt-1 text-sm text-[var(--yt-muted)] line-clamp-3">
+                    {item.description}
+                  </p>
+                ) : null}
+                {item.ctaHref && item.ctaLabel ? (
+                  <Link
+                    href={item.ctaHref}
+                    className="mt-3 inline-block text-sm text-[#0284c7] hover:underline"
+                  >
+                    {item.ctaLabel}
+                  </Link>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!isAdmin && stories.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Success stories</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {stories.map((story) => (
+              <article key={story.id} className="yt-card p-4">
+                <p className="font-semibold">{story.studentName}</p>
+                <p className="text-sm text-[var(--yt-muted)]">
+                  {story.jobTitle} · {story.companyName}
+                </p>
+                {story.course?.name ? (
+                  <p className="mt-1 text-xs text-[#0284c7]">{story.course.name}</p>
+                ) : null}
+                {story.testimonial ? (
+                  <p className="mt-2 text-sm line-clamp-4">{story.testimonial}</p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {coursesError && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

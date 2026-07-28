@@ -1,7 +1,7 @@
 import { requireAppUser } from "@/lib/auth";
 import { getOneDriveFileContentResponse } from "@/lib/graph";
 import { validatePlaybackSession } from "@/lib/playback";
-import { prisma } from "@/lib/prisma";
+import { assertStreamAccess, StreamAccessError } from "@/lib/streamAccess";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ itemId: string }> };
@@ -28,19 +28,11 @@ export async function GET(request: Request, { params }: RouteParams) {
       );
     }
 
-    if (user.role !== "ADMIN") {
-      const access = await prisma.accessRequest.findUnique({
-        where: {
-          userId_courseFolderId: {
-            userId: user.id,
-            courseFolderId,
-          },
-        },
-      });
-      if (access?.status !== "APPROVED") {
-        return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-      }
-    }
+    await assertStreamAccess({
+      userId: user.id,
+      role: user.role,
+      courseFolderId,
+    });
 
     const session = await validatePlaybackSession({
       userId: user.id,
@@ -76,6 +68,12 @@ export async function GET(request: Request, { params }: RouteParams) {
       headers,
     });
   } catch (error) {
+    if (error instanceof StreamAccessError) {
+      return NextResponse.json(
+        { message: error.message, code: error.code, ...error.details },
+        { status: error.status },
+      );
+    }
     const message = error instanceof Error ? error.message : "Failed to stream file";
     if (message === "UNAUTHORIZED") {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

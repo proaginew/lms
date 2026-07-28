@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
+import { activateEnrollmentOnApproval } from "@/lib/enrollment";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -20,6 +21,13 @@ export async function POST(_: Request, { params }: RouteParams) {
         reviewedAt: new Date(),
       },
     });
+
+    await activateEnrollmentOnApproval({
+      userId: updated.userId,
+      courseFolderId: updated.courseFolderId,
+      courseName: updated.courseName,
+    });
+
     return NextResponse.json({ request: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to approve";

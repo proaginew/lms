@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -19,18 +20,30 @@ export default function RequestAccessButton({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feeBlocked, setFeeBlocked] = useState(false);
 
   async function onClick() {
     setLoading(true);
     setError(null);
+    setFeeBlocked(false);
     try {
       const response = await fetch("/api/access-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courseFolderId, courseName }),
       });
-      const data = (await response.json()) as { message?: string };
+      const data = (await response.json()) as {
+        message?: string;
+        code?: string;
+        href?: string;
+      };
       if (!response.ok) {
+        if (data.code === "FEE_BLOCKED") {
+          setFeeBlocked(true);
+          throw new Error(
+            `${data.message || "Outstanding fee balance"}. Open My Fees to review dues.`,
+          );
+        }
         throw new Error(data.message ?? "Failed to request access");
       }
       router.refresh();
@@ -51,7 +64,16 @@ export default function RequestAccessButton({
       >
         {loading ? "Submitting..." : label}
       </button>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && (
+        <div className="text-xs text-red-600">
+          <p>{error}</p>
+          {feeBlocked && (
+            <Link href="/my-learning/fees" className="mt-1 inline-block font-semibold underline">
+              Open My Fees
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }

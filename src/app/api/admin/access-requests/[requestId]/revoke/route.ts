@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth";
+import { deactivateEnrollmentOnRevoke } from "@/lib/enrollment";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -24,6 +25,12 @@ export async function POST(req: Request, { params }: RouteParams) {
         reviewedAt: new Date(),
       },
     });
+
+    await deactivateEnrollmentOnRevoke({
+      userId: updated.userId,
+      courseFolderId: updated.courseFolderId,
+    });
+
     return NextResponse.json({ request: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to revoke";

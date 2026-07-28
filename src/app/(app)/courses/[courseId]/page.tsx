@@ -5,6 +5,7 @@ import CourseVideoTiles from "@/components/CourseVideoTiles";
 import RequestAccessButton from "@/components/RequestAccessButton";
 import { requireAppUser } from "@/lib/auth";
 import { enqueueCourseContent, kickContentProcessing } from "@/lib/contentAgent";
+import { ensureCourseFromFolder } from "@/lib/courses";
 import { getOneDriveFolderMeta, listOneDriveFolderChildren } from "@/lib/graph";
 import { cleanFileName, getTitlesForItems, webThumbnailFor } from "@/lib/videoTitles";
 import { prisma } from "@/lib/prisma";
@@ -43,6 +44,17 @@ export default async function CourseDetailPage({ params }: PageProps) {
       </div>
     );
   }
+
+  after(async () => {
+    try {
+      await ensureCourseFromFolder({
+        courseFolderId: folderId,
+        name: course.name,
+      });
+    } catch {
+      // best-effort
+    }
+  });
 
   const access = await prisma.accessRequest.findUnique({
     where: {

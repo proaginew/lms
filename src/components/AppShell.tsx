@@ -2,6 +2,7 @@
 
 import LiveUsersChip from "@/components/LiveUsersChip";
 import NavigationProgress from "@/components/NavigationProgress";
+import NotificationBell from "@/components/NotificationBell";
 import { UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,12 +17,16 @@ type AppShellProps = {
 const learnerLinks = [
   { href: "/", label: "Courses" },
   { href: "/my-learning", label: "My Learning" },
+  { href: "/my-learning/fees", label: "My Fees" },
 ];
 
 const adminLinks = [
   { href: "/", label: "Courses" },
   { href: "/my-learning", label: "My Learning" },
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/fees", label: "Fees" },
+  { href: "/admin/announcements", label: "Announcements" },
+  { href: "/admin/success-stories", label: "Success Stories" },
   { href: "/admin/notes", label: "Content Agent" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/requests", label: "Access Requests" },
@@ -86,6 +91,7 @@ export default function AppShell({ role, children }: AppShellProps) {
           </form>
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+            <NotificationBell />
             <LiveUsersChip isAdmin={isAdmin} />
             <UserButton />
           </div>
