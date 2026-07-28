@@ -1,9 +1,11 @@
 import WatchTheater from "@/components/WatchTheater";
 import { requireAppUser } from "@/lib/auth";
+import { enqueueCourseContent, kickContentProcessing } from "@/lib/contentAgent";
 import { getOneDriveFolderMeta, listOneDriveFolderChildren } from "@/lib/graph";
 import { cleanFileName, getTitlesForItems, webThumbnailFor } from "@/lib/videoTitles";
 import { getVideoNotes } from "@/lib/videoNotes";
 import { prisma } from "@/lib/prisma";
+import { after } from "next/server";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +69,19 @@ export default async function WatchPage({ params }: PageProps) {
 
   const current = playlist.find((item) => item.id === fileId)!;
   const initialNotes = await getVideoNotes(fileId);
+
+  // Ensure this lecture (and siblings) get notes/quiz queued if missing.
+  after(async () => {
+    try {
+      await enqueueCourseContent({
+        courseFolderId: folderId,
+        videos: videos.map((video) => ({ id: video.id, name: video.name })),
+      });
+      await kickContentProcessing(2);
+    } catch {
+      // Best-effort
+    }
+  });
 
   return (
     <WatchTheater

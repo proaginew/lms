@@ -17,12 +17,43 @@ export type NotesGlossaryItem = {
   definition: string;
 };
 
+export type TopicNotes = {
+  name: string;
+  timestamp: string | null;
+  explanation: string;
+  importantPoints: string[];
+  steps: string[];
+  commandsCode: string[];
+  examples: string[];
+  bestPractices: string[];
+  commonMistakes: string[];
+  notes: string[];
+};
+
+export type QaItem = {
+  question: string;
+  answer: string;
+};
+
+export type TimestampIndexItem = {
+  timestamp: string;
+  topic: string;
+};
+
 export type VideoNotesContent = {
   headline: string;
-  summary: string;
-  keyTakeaways: string[];
-  sections: NotesSection[];
+  overview: string;
+  learningObjectives: string[];
+  topics: TopicNotes[];
   glossary: NotesGlossaryItem[];
+  questionsAndAnswers: QaItem[];
+  keyTakeaways: string[];
+  timestampIndex: TimestampIndexItem[];
+  actionItems: string[];
+  references: string[];
+  /** Legacy aliases kept for older notes / exports */
+  summary: string;
+  sections: NotesSection[];
   studyTips: string[];
 };
 
@@ -46,14 +77,126 @@ function getOpenAI() {
   return new OpenAI({ apiKey });
 }
 
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
 function emptyNotes(title: string): VideoNotesContent {
   return {
     headline: title,
-    summary: "",
-    keyTakeaways: [],
-    sections: [],
+    overview: "",
+    learningObjectives: [],
+    topics: [],
     glossary: [],
+    questionsAndAnswers: [],
+    keyTakeaways: [],
+    timestampIndex: [],
+    actionItems: [],
+    references: [],
+    summary: "",
+    sections: [],
     studyTips: [],
+  };
+}
+
+function topicFromLegacySection(section: NotesSection): TopicNotes {
+  return {
+    name: section.heading || "Topic",
+    timestamp: null,
+    explanation: section.body || "",
+    importantPoints: section.bullets ?? [],
+    steps: [],
+    commandsCode: [],
+    examples: [],
+    bestPractices: [],
+    commonMistakes: [],
+    notes: [],
+  };
+}
+
+function sectionsFromTopics(topics: TopicNotes[]): NotesSection[] {
+  return topics.map((topic) => ({
+    heading: topic.name,
+    body: topic.explanation,
+    bullets: topic.importantPoints,
+  }));
+}
+
+export function normalizeNotesContent(
+  partial: Partial<VideoNotesContent> & { headline?: string },
+): VideoNotesContent {
+  const topicsRaw = Array.isArray(partial.topics) ? partial.topics : [];
+  let topics: TopicNotes[] = topicsRaw
+    .map((topic) => ({
+      name: String(topic?.name ?? "").trim(),
+      timestamp: topic?.timestamp ? String(topic.timestamp).trim() : null,
+      explanation: String(topic?.explanation ?? "").trim(),
+      importantPoints: asStringList(topic?.importantPoints),
+      steps: asStringList(topic?.steps),
+      commandsCode: asStringList(topic?.commandsCode),
+      examples: asStringList(topic?.examples),
+      bestPractices: asStringList(topic?.bestPractices),
+      commonMistakes: asStringList(topic?.commonMistakes),
+      notes: asStringList(topic?.notes),
+    }))
+    .filter((topic) => topic.name || topic.explanation);
+
+  const legacySections = Array.isArray(partial.sections)
+    ? partial.sections
+        .map((section) => ({
+          heading: String(section?.heading ?? "").trim(),
+          body: String(section?.body ?? "").trim(),
+          bullets: asStringList(section?.bullets),
+        }))
+        .filter((section) => section.heading || section.body)
+    : [];
+
+  if (!topics.length && legacySections.length) {
+    topics = legacySections.map(topicFromLegacySection);
+  }
+
+  const overview =
+    String(partial.overview ?? "").trim() || String(partial.summary ?? "").trim();
+  const actionItems = asStringList(partial.actionItems);
+  const studyTips = asStringList(partial.studyTips);
+  const headline = (partial.headline ?? "").trim() || "Training Notes";
+
+  return {
+    headline,
+    overview,
+    learningObjectives: asStringList(partial.learningObjectives),
+    topics,
+    glossary: Array.isArray(partial.glossary)
+      ? partial.glossary
+          .map((item) => ({
+            term: String(item?.term ?? "").trim(),
+            definition: String(item?.definition ?? "").trim(),
+          }))
+          .filter((item) => item.term && item.definition)
+      : [],
+    questionsAndAnswers: Array.isArray(partial.questionsAndAnswers)
+      ? partial.questionsAndAnswers
+          .map((item) => ({
+            question: String(item?.question ?? "").trim(),
+            answer: String(item?.answer ?? "").trim(),
+          }))
+          .filter((item) => item.question && item.answer)
+      : [],
+    keyTakeaways: asStringList(partial.keyTakeaways),
+    timestampIndex: Array.isArray(partial.timestampIndex)
+      ? partial.timestampIndex
+          .map((item) => ({
+            timestamp: String(item?.timestamp ?? "").trim(),
+            topic: String(item?.topic ?? "").trim(),
+          }))
+          .filter((item) => item.timestamp && item.topic)
+      : [],
+    actionItems,
+    references: asStringList(partial.references),
+    summary: overview,
+    sections: topics.length ? sectionsFromTopics(topics) : legacySections,
+    studyTips: studyTips.length ? studyTips : actionItems,
   };
 }
 
@@ -61,35 +204,7 @@ export function parseNotesJson(raw: string | null | undefined): VideoNotesConten
   if (!raw?.trim()) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<VideoNotesContent>;
-    return {
-      headline: (parsed.headline ?? "").trim() || "Study Notes",
-      summary: (parsed.summary ?? "").trim(),
-      keyTakeaways: Array.isArray(parsed.keyTakeaways)
-        ? parsed.keyTakeaways.map((item) => String(item).trim()).filter(Boolean)
-        : [],
-      sections: Array.isArray(parsed.sections)
-        ? parsed.sections
-            .map((section) => ({
-              heading: String(section?.heading ?? "").trim(),
-              body: String(section?.body ?? "").trim(),
-              bullets: Array.isArray(section?.bullets)
-                ? section.bullets.map((b) => String(b).trim()).filter(Boolean)
-                : [],
-            }))
-            .filter((section) => section.heading || section.body)
-        : [],
-      glossary: Array.isArray(parsed.glossary)
-        ? parsed.glossary
-            .map((item) => ({
-              term: String(item?.term ?? "").trim(),
-              definition: String(item?.definition ?? "").trim(),
-            }))
-            .filter((item) => item.term && item.definition)
-        : [],
-      studyTips: Array.isArray(parsed.studyTips)
-        ? parsed.studyTips.map((item) => String(item).trim()).filter(Boolean)
-        : [],
-    };
+    return normalizeNotesContent(parsed);
   } catch {
     return null;
   }
@@ -100,7 +215,27 @@ type OutlineTopic = {
   heading: string;
   focus: string;
   excerptHint: string;
+  timestamp?: string | null;
 };
+
+const NOTES_SYSTEM_RULES = `You are an expert Technical Documentation Specialist converting training session transcripts into professional training notes.
+
+Your ONLY source of information is the transcript provided.
+
+STRICT RULES:
+1. Do NOT use external knowledge.
+2. Do NOT generate missing information.
+3. Do NOT invent examples, code, commands, explanations, diagrams, or best practices.
+4. Every statement must be directly supported by the transcript.
+5. Remove filler words and conversational noise (um, uh, okay, right, basically, you know, hmm, let's see).
+6. Correct grammar and sentence structure without changing meaning.
+7. Merge repeated explanations into one concise explanation.
+8. Preserve all technical terms exactly as spoken.
+9. Preserve any code, commands, filenames, URLs, APIs, class names, function names, SQL, config values, and error messages exactly as they appear.
+10. If timestamps exist, associate each topic with the appropriate timestamp.
+11. Ignore greetings, introductions, attendance, jokes, and unrelated conversation unless they contribute to learning.
+12. Do not summarize away important technical details.
+13. Leave a field empty ("" or []) when the transcript does not support it — never invent content.`;
 
 function chunkText(text: string, size: number, overlap = 400): string[] {
   const chunks: string[] = [];
@@ -121,17 +256,22 @@ async function outlineFromChunk(input: {
   const openai = getOpenAI();
   const completion = await openai.chat.completions.create({
     model: getContentModel(),
-    temperature: 0.2,
+    temperature: 0.1,
     response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
-        content: `Extract EVERY distinct teaching point from this transcript chunk for exhaustive study notes.
-Return JSON: { "topics": [{ "heading": string, "focus": string, "excerptHint": string }] }
+        content: `${NOTES_SYSTEM_RULES}
+
+Extract EVERY distinct teaching topic from this transcript chunk.
+Return JSON: {
+  "topics": [{ "heading": string, "focus": string, "excerptHint": string, "timestamp": string|null }]
+}
 Rules:
-- Prefer many atomic topics over few broad ones (aim for dense coverage).
-- Do not skip definitions, steps, examples, warnings, formulas, comparisons, or demos.
-- excerptHint: short phrase to locate the point in the chunk.
+- Prefer many atomic topics over few broad ones.
+- Include definitions, steps, examples, warnings, formulas, comparisons, or demos only if present in the chunk.
+- timestamp: only if present in the transcript chunk; otherwise null.
+- excerptHint: short phrase locating the point in the chunk.
 - No markdown/emojis.`,
       },
       {
@@ -153,6 +293,7 @@ Rules:
         heading: String(t.heading ?? "").trim(),
         focus: String(t.focus ?? "").trim(),
         excerptHint: String(t.excerptHint ?? "").trim(),
+        timestamp: t.timestamp ? String(t.timestamp).trim() : null,
       }))
       .filter((t) => t.heading);
   } catch {
@@ -164,25 +305,40 @@ async function expandTopic(input: {
   topic: OutlineTopic;
   transcript: string;
   title: string;
-}): Promise<NotesSection> {
+}): Promise<TopicNotes> {
   const openai = getOpenAI();
-  const window = input.transcript.slice(0, 14000);
+  const window = input.transcript.slice(0, 16000);
   const completion = await openai.chat.completions.create({
     model: getContentModel(),
-    temperature: 0.4,
+    temperature: 0.2,
     response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
-        content: `You are an expert instructor writing VERY elaborate study notes for one lecture topic.
-Return JSON: { "heading": string, "body": string, "bullets": string[] }
-Rules:
-- body: 4-8 rich teaching paragraphs separated by \\n\\n.
-- Explain what / why / how; include examples, edge cases, and common mistakes from the lecture.
-- Write so a student can learn the topic without rewatching that part of the video.
-- Prefer depth and completeness over brevity — never thin summaries.
-- bullets: 4-10 concrete checkpoints, steps, or recall prompts.
-- No markdown/emojis.`,
+        content: `${NOTES_SYSTEM_RULES}
+
+Write professional training notes for ONE topic using only the transcript.
+Return JSON: {
+  "name": string,
+  "timestamp": string|null,
+  "explanation": string,
+  "importantPoints": string[],
+  "steps": string[],
+  "commandsCode": string[],
+  "examples": string[],
+  "bestPractices": string[],
+  "commonMistakes": string[],
+  "notes": string[]
+}
+Field rules:
+- explanation: clear multi-paragraph explanation (\\n\\n) based only on the transcript.
+- importantPoints: bullet points supported by the transcript.
+- steps: numbered process steps ONLY if described in the transcript.
+- commandsCode: ONLY code/commands present in the transcript. Put each distinct snippet as its own string. Prefer multi-line blocks. You MAY prefix with language on the first line like "sql:\\nSELECT ..." or "typescript:\\nconst x = 1". Never invent code.
+- In explanation text, wrap short identifiers in single backticks (like `Get-Item`), and put longer code blocks in commandsCode instead of prose.
+- examples / bestPractices / commonMistakes / notes: ONLY if explicitly discussed; else [].
+- timestamp: only if present; else null.
+- Do not use markdown headings or emojis.`,
       },
       {
         role: "user",
@@ -196,19 +352,33 @@ Rules:
   });
   const raw = completion.choices[0]?.message?.content?.trim() ?? "{}";
   try {
-    const parsed = JSON.parse(raw) as Partial<NotesSection>;
+    const parsed = JSON.parse(raw) as Partial<TopicNotes>;
     return {
-      heading: (parsed.heading ?? input.topic.heading).trim(),
-      body: String(parsed.body ?? "").trim(),
-      bullets: Array.isArray(parsed.bullets)
-        ? parsed.bullets.map((b) => String(b).trim()).filter(Boolean)
-        : [],
+      name: (parsed.name ?? input.topic.heading).trim(),
+      timestamp: parsed.timestamp
+        ? String(parsed.timestamp).trim()
+        : input.topic.timestamp || null,
+      explanation: String(parsed.explanation ?? "").trim(),
+      importantPoints: asStringList(parsed.importantPoints),
+      steps: asStringList(parsed.steps),
+      commandsCode: asStringList(parsed.commandsCode),
+      examples: asStringList(parsed.examples),
+      bestPractices: asStringList(parsed.bestPractices),
+      commonMistakes: asStringList(parsed.commonMistakes),
+      notes: asStringList(parsed.notes),
     };
   } catch {
     return {
-      heading: input.topic.heading,
-      body: input.topic.focus || "See the lecture recording for details on this topic.",
-      bullets: [],
+      name: input.topic.heading,
+      timestamp: input.topic.timestamp || null,
+      explanation: input.topic.focus || "See the lecture recording for details on this topic.",
+      importantPoints: [],
+      steps: [],
+      commandsCode: [],
+      examples: [],
+      bestPractices: [],
+      commonMistakes: [],
+      notes: [],
     };
   }
 }
@@ -216,39 +386,65 @@ Rules:
 async function wrapUpNotes(input: {
   title: string;
   topic: string | null;
-  sections: NotesSection[];
+  topics: TopicNotes[];
   transcript: string;
-}): Promise<Pick<VideoNotesContent, "headline" | "summary" | "keyTakeaways" | "glossary" | "studyTips">> {
+}): Promise<
+  Pick<
+    VideoNotesContent,
+    | "headline"
+    | "overview"
+    | "learningObjectives"
+    | "keyTakeaways"
+    | "glossary"
+    | "questionsAndAnswers"
+    | "timestampIndex"
+    | "actionItems"
+    | "references"
+  >
+> {
   const openai = getOpenAI();
   const completion = await openai.chat.completions.create({
     model: getContentModel(),
-    temperature: 0.35,
+    temperature: 0.2,
     response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
-        content: `Create wrap-up study materials for a long lecture — detailed enough to print as a study guide.
+        content: `${NOTES_SYSTEM_RULES}
+
+Create wrap-up sections for training notes using only the transcript and topic list.
 Return JSON: {
   "headline": string,
-  "summary": string,
+  "overview": string,
+  "learningObjectives": string[],
   "keyTakeaways": string[],
   "glossary": [{ "term": string, "definition": string }],
-  "studyTips": string[]
+  "questionsAndAnswers": [{ "question": string, "answer": string }],
+  "timestampIndex": [{ "timestamp": string, "topic": string }],
+  "actionItems": string[],
+  "references": string[]
 }
-Rules:
-- summary: 5-10 elaborate paragraphs (\\n\\n) covering the whole lecture arc with connections between topics.
-- keyTakeaways: one crisp bullet per major topic (can be many; do not under-cover).
-- glossary: thorough definitions for every important term/acronym.
-- studyTips: 6-10 concrete revision tips tied to this lecture.
-- No markdown/emojis.`,
+Field rules:
+- headline: Lesson Title from the transcript/session.
+- overview: concise overview based only on the transcript.
+- learningObjectives: only objectives mentioned or clearly implied by the instructor.
+- glossary: ONLY terms explained in the transcript.
+- questionsAndAnswers: ONLY Q&A that appear in the transcript.
+- timestampIndex: ONLY timestamps present in the transcript.
+- actionItems: ONLY assignments/exercises/follow-ups mentioned.
+- references: ONLY books/websites/tools/frameworks/docs explicitly mentioned.
+- Empty arrays when unsupported. No markdown/emojis.`,
       },
       {
         role: "user",
         content: JSON.stringify({
           title: input.title,
           topic: input.topic,
-          sectionHeadings: input.sections.map((s) => s.heading),
-          transcriptExcerpt: input.transcript.slice(0, 14000),
+          topicNames: input.topics.map((t) => ({
+            name: t.name,
+            timestamp: t.timestamp,
+          })),
+          transcriptExcerpt: input.transcript.slice(0, 16000),
         }),
       },
     ],
@@ -256,12 +452,24 @@ Rules:
   const raw = completion.choices[0]?.message?.content?.trim() ?? "{}";
   try {
     const parsed = JSON.parse(raw) as Partial<VideoNotesContent>;
+    const timestampIndex = Array.isArray(parsed.timestampIndex)
+      ? parsed.timestampIndex
+          .map((item) => ({
+            timestamp: String(item?.timestamp ?? "").trim(),
+            topic: String(item?.topic ?? "").trim(),
+          }))
+          .filter((item) => item.timestamp && item.topic)
+      : input.topics
+          .filter((t) => t.timestamp)
+          .map((t) => ({ timestamp: t.timestamp as string, topic: t.name }));
+
     return {
       headline: (parsed.headline ?? input.title).trim(),
-      summary: String(parsed.summary ?? "").trim(),
-      keyTakeaways: Array.isArray(parsed.keyTakeaways)
-        ? parsed.keyTakeaways.map((x) => String(x).trim()).filter(Boolean)
-        : input.sections.map((s) => s.heading),
+      overview: String(parsed.overview ?? "").trim(),
+      learningObjectives: asStringList(parsed.learningObjectives),
+      keyTakeaways: asStringList(parsed.keyTakeaways).length
+        ? asStringList(parsed.keyTakeaways)
+        : input.topics.map((t) => t.name),
       glossary: Array.isArray(parsed.glossary)
         ? parsed.glossary
             .map((g) => ({
@@ -270,20 +478,34 @@ Rules:
             }))
             .filter((g) => g.term && g.definition)
         : [],
-      studyTips: Array.isArray(parsed.studyTips)
-        ? parsed.studyTips.map((x) => String(x).trim()).filter(Boolean)
+      questionsAndAnswers: Array.isArray(parsed.questionsAndAnswers)
+        ? parsed.questionsAndAnswers
+            .map((item) => ({
+              question: String(item?.question ?? "").trim(),
+              answer: String(item?.answer ?? "").trim(),
+            }))
+            .filter((item) => item.question && item.answer)
         : [],
+      timestampIndex,
+      actionItems: asStringList(parsed.actionItems),
+      references: asStringList(parsed.references),
     };
   } catch {
     return {
       headline: input.title,
-      summary: input.sections
+      overview: input.topics
         .slice(0, 5)
-        .map((s) => s.body.split(/\n\n/)[0] || s.heading)
+        .map((t) => t.explanation.split(/\n\n/)[0] || t.name)
         .join("\n\n"),
-      keyTakeaways: input.sections.map((s) => s.heading),
+      learningObjectives: [],
+      keyTakeaways: input.topics.map((t) => t.name),
       glossary: [],
-      studyTips: ["Review each section and rewrite key ideas in your own words."],
+      questionsAndAnswers: [],
+      timestampIndex: input.topics
+        .filter((t) => t.timestamp)
+        .map((t) => ({ timestamp: t.timestamp as string, topic: t.name })),
+      actionItems: [],
+      references: [],
     };
   }
 }
@@ -294,7 +516,7 @@ async function notesFromTranscript(input: {
   topic: string | null;
   fileName: string;
   existingOutline?: OutlineTopic[] | null;
-  existingSections?: NotesSection[] | null;
+  existingTopics?: TopicNotes[] | null;
 }): Promise<{ notes: VideoNotesContent; outline: OutlineTopic[] }> {
   const fallback = emptyNotes(input.title);
 
@@ -302,8 +524,11 @@ async function notesFromTranscript(input: {
     return {
       notes: {
         ...fallback,
+        overview:
+          "A full transcript was not available for this recording, so detailed training notes could not be generated yet.",
         summary:
-          "A full transcript was not available for this recording, so detailed study notes could not be generated yet.",
+          "A full transcript was not available for this recording, so detailed training notes could not be generated yet.",
+        actionItems: ["Watch the video carefully and jot down your own key points."],
         studyTips: ["Watch the video carefully and jot down your own key points."],
       },
       outline: [],
@@ -321,7 +546,6 @@ async function notesFromTranscript(input: {
       });
       outline.push(...topics);
     }
-    // Deduplicate by similar headings
     const seen = new Set<string>();
     outline = outline.filter((t) => {
       const key = t.heading.toLowerCase().replace(/\s+/g, " ").trim();
@@ -331,13 +555,12 @@ async function notesFromTranscript(input: {
     });
   }
 
-  const sections: NotesSection[] = [...(input.existingSections ?? [])];
-  const startAt = sections.length;
-  // Expand in batches; cap sections for a single invocation budget
+  const topics: TopicNotes[] = [...(input.existingTopics ?? [])];
+  const startAt = topics.length;
   const MAX_EXPAND_PER_RUN = 6;
   const toExpand = outline.slice(startAt, startAt + MAX_EXPAND_PER_RUN);
   for (const topic of toExpand) {
-    sections.push(
+    topics.push(
       await expandTopic({
         topic,
         transcript: input.transcript,
@@ -346,17 +569,14 @@ async function notesFromTranscript(input: {
     );
   }
 
-  if (sections.length < outline.length) {
-    // Partial progress — caller should resume
+  if (topics.length < outline.length) {
     return {
-      notes: {
+      notes: normalizeNotesContent({
         headline: input.title,
-        summary: "Notes generation in progress…",
+        overview: "Notes generation in progress…",
         keyTakeaways: outline.map((t) => t.heading),
-        sections,
-        glossary: [],
-        studyTips: [],
-      },
+        topics,
+      }),
       outline,
     };
   }
@@ -364,15 +584,15 @@ async function notesFromTranscript(input: {
   const wrap = await wrapUpNotes({
     title: input.title,
     topic: input.topic,
-    sections,
+    topics,
     transcript: input.transcript,
   });
 
   return {
-    notes: {
+    notes: normalizeNotesContent({
       ...wrap,
-      sections,
-    },
+      topics,
+    }),
     outline,
   };
 }
@@ -450,9 +670,9 @@ export async function generateVideoNotes(input: {
       transcript = row.transcriptFull?.trim() || row.transcriptPreview?.trim() || "";
     }
 
-    const title = row?.title?.trim() || cleanFileName(row?.fileName || "") || "Study Notes";
+    const title = row?.title?.trim() || cleanFileName(row?.fileName || "") || "Training Notes";
     let existingOutline: OutlineTopic[] | null = null;
-    let existingSections: NotesSection[] | null = null;
+    let existingTopics: TopicNotes[] | null = null;
     if (!input.force && row?.notesOutlineJson) {
       try {
         existingOutline = JSON.parse(row.notesOutlineJson) as OutlineTopic[];
@@ -462,7 +682,7 @@ export async function generateVideoNotes(input: {
     }
     if (!input.force && row?.notesJson) {
       const partial = parseNotesJson(row.notesJson);
-      if (partial?.sections?.length) existingSections = partial.sections;
+      if (partial?.topics?.length) existingTopics = partial.topics;
     }
 
     const { notes, outline } = await notesFromTranscript({
@@ -471,10 +691,10 @@ export async function generateVideoNotes(input: {
       topic: row?.topic ?? null,
       fileName: row?.fileName || "Meeting Recording",
       existingOutline,
-      existingSections,
+      existingTopics,
     });
 
-    const complete = outline.length > 0 && notes.sections.length >= outline.length;
+    const complete = outline.length > 0 && notes.topics.length >= outline.length;
 
     return prisma.videoAsset.update({
       where: { itemId: input.itemId },
@@ -621,45 +841,112 @@ export async function buildNotesPdf(input: {
   });
   y -= 18;
 
-  if (input.notes.summary) {
+  if (input.notes.overview || input.notes.summary) {
     drawParagraph("Overview", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
-    drawParagraph(input.notes.summary, { size: 11, gap: 15 });
+    drawParagraph(input.notes.overview || input.notes.summary, { size: 11, gap: 15 });
+    y -= 8;
+  }
+
+  if (input.notes.learningObjectives.length) {
+    drawParagraph("Learning Objectives", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    for (const item of input.notes.learningObjectives) {
+      drawParagraph(`•  ${item}`, { size: 11, gap: 14, charsPerLine: 84 });
+    }
     y -= 8;
   }
 
   if (input.notes.keyTakeaways.length) {
-    drawParagraph("Key takeaways", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    drawParagraph("Key Takeaways", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
     for (const item of input.notes.keyTakeaways) {
       drawParagraph(`•  ${item}`, { size: 11, gap: 14, charsPerLine: 84 });
     }
     y -= 8;
   }
 
-  for (const section of input.notes.sections) {
-    if (section.heading) {
-      drawParagraph(section.heading, { size: 13, bold: true, charsPerLine: 72, gap: 17 });
+  const topics =
+    input.notes.topics.length > 0
+      ? input.notes.topics
+      : input.notes.sections.map((section) => ({
+          name: section.heading,
+          timestamp: null as string | null,
+          explanation: section.body,
+          importantPoints: section.bullets ?? [],
+          steps: [] as string[],
+          commandsCode: [] as string[],
+          examples: [] as string[],
+          bestPractices: [] as string[],
+          commonMistakes: [] as string[],
+          notes: [] as string[],
+        }));
+
+  for (const topic of topics) {
+    const heading = topic.timestamp ? `${topic.name} (${topic.timestamp})` : topic.name;
+    if (heading) {
+      drawParagraph(heading, { size: 13, bold: true, charsPerLine: 72, gap: 17 });
     }
-    if (section.body) {
-      drawParagraph(section.body, { size: 11, gap: 15 });
+    if (topic.explanation) {
+      drawParagraph("Explanation", { size: 11, bold: true, gap: 14, charsPerLine: 84 });
+      drawParagraph(topic.explanation, { size: 11, gap: 15 });
     }
-    for (const bullet of section.bullets ?? []) {
-      drawParagraph(`•  ${bullet}`, { size: 11, gap: 14, charsPerLine: 84 });
+    const lists: Array<[string, string[]]> = [
+      ["Important Points", topic.importantPoints],
+      ["Steps or Process", topic.steps],
+      ["Commands / Code", topic.commandsCode],
+      ["Examples Mentioned", topic.examples],
+      ["Best Practices", topic.bestPractices],
+      ["Common Mistakes", topic.commonMistakes],
+      ["Notes", topic.notes],
+    ];
+    for (const [label, items] of lists) {
+      if (!items.length) continue;
+      drawParagraph(label, { size: 11, bold: true, gap: 14, charsPerLine: 84 });
+      items.forEach((item, index) => {
+        const prefix = label === "Steps or Process" ? `${index + 1}.  ` : "•  ";
+        drawParagraph(`${prefix}${item}`, { size: 11, gap: 14, charsPerLine: 84 });
+      });
     }
     y -= 6;
   }
 
   if (input.notes.glossary.length) {
-    drawParagraph("Glossary", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    drawParagraph("Definitions", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
     for (const item of input.notes.glossary) {
       drawParagraph(`${item.term}: ${item.definition}`, { size: 11, gap: 14 });
     }
     y -= 6;
   }
 
-  if (input.notes.studyTips.length) {
-    drawParagraph("Study tips", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
-    for (const tip of input.notes.studyTips) {
+  if (input.notes.questionsAndAnswers.length) {
+    drawParagraph("Questions and Answers", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    for (const item of input.notes.questionsAndAnswers) {
+      drawParagraph(`Q: ${item.question}`, { size: 11, bold: true, gap: 14 });
+      drawParagraph(`A: ${item.answer}`, { size: 11, gap: 14 });
+    }
+    y -= 6;
+  }
+
+  if (input.notes.timestampIndex.length) {
+    drawParagraph("Timestamp Index", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    for (const item of input.notes.timestampIndex) {
+      drawParagraph(`${item.timestamp} — ${item.topic}`, { size: 11, gap: 14 });
+    }
+    y -= 6;
+  }
+
+  if (input.notes.actionItems.length || input.notes.studyTips.length) {
+    drawParagraph("Action Items", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    for (const tip of input.notes.actionItems.length
+      ? input.notes.actionItems
+      : input.notes.studyTips) {
       drawParagraph(`•  ${tip}`, { size: 11, gap: 14, charsPerLine: 84 });
+    }
+    y -= 6;
+  }
+
+  if (input.notes.references.length) {
+    drawParagraph("References", { size: 14, bold: true, charsPerLine: 70, gap: 18 });
+    for (const ref of input.notes.references) {
+      drawParagraph(`•  ${ref}`, { size: 11, gap: 14, charsPerLine: 84 });
     }
   }
 
@@ -724,32 +1011,88 @@ export async function buildNotesDocx(input: {
     );
   };
 
-  if (input.notes.summary) {
+  if (input.notes.overview || input.notes.summary) {
     addHeading("Overview");
-    addBody(input.notes.summary);
+    addBody(input.notes.overview || input.notes.summary);
+  }
+
+  if (input.notes.learningObjectives.length) {
+    addHeading("Learning Objectives");
+    input.notes.learningObjectives.forEach(addBullet);
   }
 
   if (input.notes.keyTakeaways.length) {
-    addHeading("Key takeaways");
+    addHeading("Key Takeaways");
     input.notes.keyTakeaways.forEach(addBullet);
   }
 
-  for (const section of input.notes.sections) {
-    if (section.heading) {
+  const topics =
+    input.notes.topics.length > 0
+      ? input.notes.topics
+      : input.notes.sections.map((section) => ({
+          name: section.heading,
+          timestamp: null as string | null,
+          explanation: section.body,
+          importantPoints: section.bullets ?? [],
+          steps: [] as string[],
+          commandsCode: [] as string[],
+          examples: [] as string[],
+          bestPractices: [] as string[],
+          commonMistakes: [] as string[],
+          notes: [] as string[],
+        }));
+
+  for (const topic of topics) {
+    children.push(
+      new Paragraph({
+        text: topic.timestamp ? `${topic.name} (${topic.timestamp})` : topic.name,
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 240, after: 100 },
+      }),
+    );
+    if (topic.explanation) {
       children.push(
         new Paragraph({
-          text: section.heading,
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 240, after: 100 },
+          children: [new TextRun({ text: "Explanation", bold: true, size: 22 })],
+          spacing: { after: 80 },
         }),
       );
+      addBody(topic.explanation);
     }
-    if (section.body) addBody(section.body);
-    (section.bullets ?? []).forEach(addBullet);
+    const lists: Array<[string, string[], boolean]> = [
+      ["Important Points", topic.importantPoints, false],
+      ["Steps or Process", topic.steps, true],
+      ["Commands / Code", topic.commandsCode, false],
+      ["Examples Mentioned", topic.examples, false],
+      ["Best Practices", topic.bestPractices, false],
+      ["Common Mistakes", topic.commonMistakes, false],
+      ["Notes", topic.notes, false],
+    ];
+    for (const [label, items, numbered] of lists) {
+      if (!items.length) continue;
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: label, bold: true, size: 22 })],
+          spacing: { before: 120, after: 80 },
+        }),
+      );
+      items.forEach((item, index) => {
+        if (numbered) {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: `${index + 1}. ${item}`, size: 22 })],
+              spacing: { after: 80 },
+            }),
+          );
+        } else {
+          addBullet(item);
+        }
+      });
+    }
   }
 
   if (input.notes.glossary.length) {
-    addHeading("Glossary");
+    addHeading("Definitions");
     for (const item of input.notes.glossary) {
       children.push(
         new Paragraph({
@@ -763,9 +1106,42 @@ export async function buildNotesDocx(input: {
     }
   }
 
-  if (input.notes.studyTips.length) {
-    addHeading("Study tips");
-    input.notes.studyTips.forEach(addBullet);
+  if (input.notes.questionsAndAnswers.length) {
+    addHeading("Questions and Answers");
+    for (const item of input.notes.questionsAndAnswers) {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: `Q: ${item.question}`, bold: true, size: 22 })],
+          spacing: { after: 60 },
+        }),
+      );
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: `A: ${item.answer}`, size: 22 })],
+          spacing: { after: 120 },
+        }),
+      );
+    }
+  }
+
+  if (input.notes.timestampIndex.length) {
+    addHeading("Timestamp Index");
+    for (const item of input.notes.timestampIndex) {
+      addBullet(`${item.timestamp} — ${item.topic}`);
+    }
+  }
+
+  if (input.notes.actionItems.length || input.notes.studyTips.length) {
+    addHeading("Action Items");
+    (input.notes.actionItems.length
+      ? input.notes.actionItems
+      : input.notes.studyTips
+    ).forEach(addBullet);
+  }
+
+  if (input.notes.references.length) {
+    addHeading("References");
+    input.notes.references.forEach(addBullet);
   }
 
   const doc = new Document({

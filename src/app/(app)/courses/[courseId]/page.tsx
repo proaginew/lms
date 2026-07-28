@@ -1,8 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { after } from "next/server";
 import CourseVideoTiles from "@/components/CourseVideoTiles";
 import RequestAccessButton from "@/components/RequestAccessButton";
 import { requireAppUser } from "@/lib/auth";
+import { enqueueCourseContent, kickContentProcessing } from "@/lib/contentAgent";
 import { getOneDriveFolderMeta, listOneDriveFolderChildren } from "@/lib/graph";
 import { cleanFileName, getTitlesForItems, webThumbnailFor } from "@/lib/videoTitles";
 import { prisma } from "@/lib/prisma";
@@ -98,6 +100,19 @@ export default async function CourseDetailPage({ params }: PageProps) {
       ),
       status: cached?.status || "PENDING",
     };
+  });
+
+  // Queue missing notes/quizzes the moment any user opens the course, then process jobs.
+  after(async () => {
+    try {
+      await enqueueCourseContent({
+        courseFolderId: folderId,
+        videos: videos.map((video) => ({ id: video.id, name: video.name })),
+      });
+      await kickContentProcessing(2);
+    } catch {
+      // Best-effort — cron will continue the queue.
+    }
   });
 
   return (

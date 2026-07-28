@@ -16,6 +16,85 @@ async function reclaimStuckLocks() {
   });
 }
 
+export async function enqueueCourseContent(input: {
+  courseFolderId: string;
+  videos: Array<{ id: string; name: string }>;
+}) {
+  let notesQueued = 0;
+  let quizQueued = 0;
+
+  for (const video of input.videos) {
+    const existing = await prisma.videoAsset.findUnique({
+      where: { itemId: video.id },
+    });
+
+    if (!existing) {
+      await prisma.videoAsset.create({
+        data: {
+          itemId: video.id,
+          courseFolderId: input.courseFolderId,
+          fileName: video.name,
+          status: "PENDING",
+          notesStatus: "PENDING",
+          quizStatus: "NONE",
+        },
+      });
+      notesQueued += 1;
+      continue;
+    }
+
+    const data: {
+      courseFolderId: string;
+      fileName?: string;
+      notesStatus?: string;
+      notesError?: null;
+      quizStatus?: string;
+      quizError?: null;
+    } = {
+      courseFolderId: input.courseFolderId,
+      fileName: existing.fileName || video.name,
+    };
+
+    if (existing.notesStatus === "NONE" || existing.notesStatus === "FAILED") {
+      data.notesStatus = "PENDING";
+      data.notesError = null;
+      notesQueued += 1;
+    }
+
+    if (
+      existing.notesStatus === "READY" &&
+      (existing.quizStatus === "NONE" || existing.quizStatus === "FAILED")
+    ) {
+      data.quizStatus = "PENDING";
+      data.quizError = null;
+      quizQueued += 1;
+    }
+
+    if (data.notesStatus || data.quizStatus) {
+      await prisma.videoAsset.update({
+        where: { itemId: video.id },
+        data,
+      });
+    }
+  }
+
+  return { notesQueued, quizQueued, videos: input.videos.length };
+}
+
+/** Process several queued jobs after a course is opened (non-discover). */
+export async function kickContentProcessing(maxJobs = 2) {
+  const results = [];
+  for (let i = 0; i < maxJobs; i += 1) {
+    const result = await processContentAgentTick({
+      discover: false,
+      forcePoll: false,
+    });
+    results.push(result.processed);
+    if (!result.processed) break;
+  }
+  return results;
+}
+
 export async function discoverOneDriveVideos() {
   const listed = await listOneDriveCourses();
   let enqueued = 0;
@@ -40,12 +119,21 @@ export async function discoverOneDriveVideos() {
         });
         enqueued += 1;
       } else if (
-        existing.notesStatus === "NONE" &&
+        (existing.notesStatus === "NONE" || existing.notesStatus === "FAILED") &&
         (existing.transcriptFull || existing.transcriptPreview || existing.status === "READY")
       ) {
         await prisma.videoAsset.update({
           where: { itemId: video.id },
-          data: { notesStatus: "PENDING" },
+          data: { notesStatus: "PENDING", notesError: null },
+        });
+        enqueued += 1;
+      } else if (
+        existing.notesStatus === "READY" &&
+        (existing.quizStatus === "NONE" || existing.quizStatus === "FAILED")
+      ) {
+        await prisma.videoAsset.update({
+          where: { itemId: video.id },
+          data: { quizStatus: "PENDING", quizError: null },
         });
         enqueued += 1;
       }

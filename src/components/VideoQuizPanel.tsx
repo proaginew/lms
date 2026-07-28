@@ -106,6 +106,27 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
     };
   }, [itemId]);
 
+  useEffect(() => {
+    if (status === "READY" || status === "FAILED") return;
+    const id = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/videos/${encodeURIComponent(itemId)}/quiz`);
+        if (!response.ok) return;
+        const json = (await response.json()) as {
+          quizStatus?: string;
+          notesStatus?: string;
+          quiz?: { title: string; questions: QuizChoiceView[] } | null;
+          attempts?: Attempt[];
+          bestPercent?: number;
+        };
+        applyQuizPayload(json);
+      } catch {
+        // ignore
+      }
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [itemId, status]);
+
   function generateQuiz(force = true) {
     if (!isAdmin) return;
     setError(null);
@@ -286,7 +307,9 @@ export default function VideoQuizPanel({ itemId, isAdmin }: Props) {
               ? notesReady
                 ? "Click Generate quiz to create exam-style questions from the lecture notes."
                 : "Open the Lecture notes tab and generate notes first, then come back here."
-              : "Once lecture notes are ready, the agent builds a topic-covering quiz here."}
+              : notesReady
+                ? "Quiz generation is queued automatically — this tab refreshes when ready."
+                : "Notes are preparing first; the quiz will follow automatically from this lecture."}
           </p>
         </div>
       )}

@@ -87,20 +87,6 @@ export default function AppShell({ role, children }: AppShellProps) {
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
             <LiveUsersChip isAdmin={isAdmin} />
-            <Link
-              href="/my-learning"
-              className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline"
-            >
-              Library
-            </Link>
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="hidden text-sm font-medium text-[var(--yt-muted)] hover:text-[var(--yt-ink)] md:inline"
-              >
-                Studio
-              </Link>
-            )}
             <UserButton />
           </div>
         </div>
