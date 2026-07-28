@@ -335,7 +335,7 @@ Field rules:
 - importantPoints: bullet points supported by the transcript.
 - steps: numbered process steps ONLY if described in the transcript.
 - commandsCode: ONLY code/commands present in the transcript. Put each distinct snippet as its own string. Prefer multi-line blocks. You MAY prefix with language on the first line like "sql:\\nSELECT ..." or "typescript:\\nconst x = 1". Never invent code.
-- In explanation text, wrap short identifiers in single backticks (like `Get-Item`), and put longer code blocks in commandsCode instead of prose.
+- In explanation text, wrap short identifiers in single backticks (like \`Get-Item\`), and put longer code blocks in commandsCode instead of prose.
 - examples / bestPractices / commonMistakes / notes: ONLY if explicitly discussed; else [].
 - timestamp: only if present; else null.
 - Do not use markdown headings or emojis.`,
