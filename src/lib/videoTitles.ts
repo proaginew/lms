@@ -105,8 +105,12 @@ export async function transcribeVideoFull(itemId: string, fileName: string): Pro
     try {
       const text = await transcribeSample(bytes, `${i}-${fileName}`);
       if (text) parts.push(text);
-    } catch {
-      if (i === 0) throw new Error("Transcription failed on first chunk");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Transcription failed";
+      if (message.includes("OPENAI_API_KEY") || message.includes("401") || message.includes("Incorrect API key")) {
+        throw new Error(message);
+      }
+      if (i === 0) throw new Error(message || "Transcription failed on first chunk");
       break;
     }
     if (bytes.length < WHISPER_MAX_BYTES * 0.9) break;

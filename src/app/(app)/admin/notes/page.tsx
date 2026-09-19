@@ -43,6 +43,7 @@ export default async function AdminNotesPage() {
         ...row,
         updatedAt: row.updatedAt.toISOString(),
       }))}
+      openaiConfigured={Boolean(process.env.OPENAI_API_KEY?.trim())}
       sync={{
         graphSubscriptionId: sync?.graphSubscriptionId ?? null,
         subscriptionExpiresAt: sync?.subscriptionExpiresAt?.toISOString() ?? null,

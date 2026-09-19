@@ -24,23 +24,31 @@ export async function getCurrentAppUser() {
   const shouldBeAdmin = isAdminEmail(clerkEmail);
 
   // upsert avoids race when parallel RSC requests both miss findUnique then create
-  return prisma.user.upsert({
-    where: { clerkUserId: userId },
-    create: {
-      clerkUserId: userId,
-      email: clerkEmail,
-      name: clerkName,
-      imageUrl: clerkImageUrl,
-      role: shouldBeAdmin ? "ADMIN" : "STUDENT",
-      status: "active",
-    },
-    update: {
-      email: clerkEmail,
-      ...(clerkName ? { name: clerkName } : {}),
-      ...(clerkImageUrl ? { imageUrl: clerkImageUrl } : {}),
-      ...(shouldBeAdmin ? { role: "ADMIN" as const } : {}),
-    },
-  });
+  try {
+    return await prisma.user.upsert({
+      where: { clerkUserId: userId },
+      create: {
+        clerkUserId: userId,
+        email: clerkEmail,
+        name: clerkName,
+        imageUrl: clerkImageUrl,
+        role: shouldBeAdmin ? "ADMIN" : "STUDENT",
+        status: "active",
+      },
+      update: {
+        email: clerkEmail,
+        ...(clerkName ? { name: clerkName } : {}),
+        ...(clerkImageUrl ? { imageUrl: clerkImageUrl } : {}),
+        ...(shouldBeAdmin ? { role: "ADMIN" as const } : {}),
+      },
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown database error";
+    console.error("[auth] Failed to sync Clerk user:", detail);
+    throw new Error(
+      "Signed in, but the database could not save your user. On Vercel, set DATABASE_URL to the aimlms_simple database (not the older neondb LMS schema).",
+    );
+  }
 }
 
 export async function requireAppUser() {

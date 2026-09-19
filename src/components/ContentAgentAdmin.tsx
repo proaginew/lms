@@ -26,11 +26,13 @@ export default function ContentAgentAdmin({
   initialStats,
   initialRows,
   total,
+  openaiConfigured,
   sync,
 }: {
   initialStats: Stats;
   initialRows: Row[];
   total: number;
+  openaiConfigured: boolean;
   sync: {
     graphSubscriptionId: string | null;
     subscriptionExpiresAt: string | null;
@@ -106,6 +108,13 @@ export default function ContentAgentAdmin({
           </button>
         </div>
       </div>
+
+      {!openaiConfigured && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          OPENAI_API_KEY is missing. Titles, lecture notes, and quizzes cannot be generated until
+          you add a key from platform.openai.com/api-keys to .env and Vercel, then restart.
+        </p>
+      )}
 
       {message && <p className="notes-error !bg-[#eff6ff] !text-[#1d4ed8]">{message}</p>}
 
